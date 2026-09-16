@@ -5,14 +5,11 @@
 Читает всю базу из Notion и сохраняет её в data/knowledge_base.json.
 В конце печатает «Загружено N страниц» — сверьте число со своей базой в Notion.
 """
-import datetime as dt
-import json
-import pathlib
-
-from app.notion_loader import NotionLoader, page_to_dict
+from app.notion_loader import NotionLoader, write_knowledge_base
+from app.rag import KB_FILE
 from config import load_config
 
-DATA_FILE = pathlib.Path("data") / "knowledge_base.json"
+DATA_FILE = KB_FILE
 
 
 def main() -> None:
@@ -44,16 +41,7 @@ def main() -> None:
         )
         return
 
-    DATA_FILE.parent.mkdir(exist_ok=True)
-    payload = {
-        "generated_at": dt.datetime.now().isoformat(timespec="seconds"),
-        "root_page": cfg.notion_root_page,
-        "pages_count": len(pages),
-        "pages": [page_to_dict(p) for p in pages],
-    }
-    DATA_FILE.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    write_knowledge_base(pages, cfg.notion_root_page or "", DATA_FILE)
 
     total_chars = sum(p.chars for p in pages)
     print(f"\n✅ Загружено {len(pages)} страниц ({total_chars:,} символов).".replace(",", " "))

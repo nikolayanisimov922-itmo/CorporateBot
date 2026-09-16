@@ -11,8 +11,8 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
 
 from app import keyboards as kb
-from app.claude_answer import ClaudeAnswerer, render_markdown
-from app.rag import Embedder, SearchIndex
+from app.claude_answer import render_markdown
+from app.knowledge_service import KnowledgeService
 from config import Config
 
 router = Router()
@@ -43,21 +43,16 @@ async def exit_knowledge(message: Message, state: FSMContext, config: Config) ->
 
 
 @router.message(KnowledgeStates.asking, F.text)
-async def ask_question(
-    message: Message,
-    index: SearchIndex | None,
-    embedder: Embedder | None,
-    answerer: ClaudeAnswerer | None,
-) -> None:
+async def ask_question(message: Message, knowledge: KnowledgeService) -> None:
     # Проверки готовности (индекс построен, ключ Claude задан).
-    if index is None or embedder is None:
+    if not knowledge.ready:
         await message.answer(
             "⚠️ Поисковый индекс не готов. Постройте его командой "
             "<code>python build_index.py</code> и перезапустите бота.",
             reply_markup=kb.knowledge_menu(),
         )
         return
-    if answerer is None:
+    if knowledge.answerer is None:
         await message.answer(
             "⚠️ Не задан ключ Claude (ANTHROPIC_API_KEY в .env). "
             "Добавьте его и перезапустите бота.",
@@ -70,8 +65,8 @@ async def ask_question(
 
     try:
         # Поиск — в отдельном потоке, чтобы не блокировать бота.
-        results = await asyncio.to_thread(index.search, embedder, question, TOP_K)
-        answer = await answerer.answer(question, results)
+        results = await asyncio.to_thread(knowledge.search, question, TOP_K)
+        answer = await knowledge.answerer.answer(question, results)
     except Exception:  # noqa: BLE001
         logging.exception("Ошибка при ответе на вопрос")
         await message.answer(
@@ -99,4 +94,31 @@ async def ask_question(
 
     await message.answer(
         text, reply_markup=kb.knowledge_menu(), disable_web_page_preview=True
+    )
+
+
+@router.message(F.text == kb.BTN_REFRESH)
+async def refresh_base(
+    message: Message, config: Config, knowledge: KnowledgeService
+) -> None:
+    """Кнопка «Обновить базу» — только для админа. Перечитывает Notion."""
+    if not config.is_admin(message.from_user.id):
+        return
+
+    await message.answer("🔄 Обновляю базу из Notion, это займёт минуту…")
+    await message.bot.send_chat_action(message.chat.id, "typing")
+    try:
+        pages, chunks = await asyncio.to_thread(knowledge.refresh)
+    except Exception as err:  # noqa: BLE001
+        logging.exception("Ошибка обновления базы")
+        await message.answer(
+            f"❌ Не удалось обновить базу: {err}",
+            reply_markup=kb.main_menu(is_admin=True),
+        )
+        return
+
+    await message.answer(
+        f"✅ База обновлена: {pages} страниц ({chunks} кусков).\n"
+        "Можно задавать вопросы — бот уже учитывает свежие данные.",
+        reply_markup=kb.main_menu(is_admin=True),
     )

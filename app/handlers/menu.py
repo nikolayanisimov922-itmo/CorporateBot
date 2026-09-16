@@ -57,6 +57,7 @@ async def on_help(message: Message, config: Config) -> None:
     )
     if is_admin:
         text += "📢 <b>Рассылка</b> — отправить объявление всем (видно только вам).\n"
+        text += "🔄 <b>Обновить базу</b> — перечитать Notion прямо сейчас.\n"
     text += "\nКоманда <code>/start</code> — открыть меню заново."
     await message.answer(text, reply_markup=kb.main_menu(is_admin))
 

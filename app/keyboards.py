@@ -5,6 +5,7 @@ from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 BTN_KNOWLEDGE = "📚 База знаний"
 BTN_SEND_DATA = "📤 Передать данные"
 BTN_BROADCAST = "📢 Рассылка"
+BTN_REFRESH = "🔄 Обновить базу"
 BTN_HELP = "ℹ️ Помощь"
 BTN_EXIT = "⬅️ Выйти в меню"
 
@@ -20,6 +21,7 @@ def main_menu(is_admin: bool = False) -> ReplyKeyboardMarkup:
     ]
     if is_admin:
         rows.append([KeyboardButton(text=BTN_BROADCAST)])
+        rows.append([KeyboardButton(text=BTN_REFRESH)])
     rows.append([KeyboardButton(text=BTN_HELP)])
 
     return ReplyKeyboardMarkup(

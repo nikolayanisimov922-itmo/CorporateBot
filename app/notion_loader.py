@@ -293,3 +293,22 @@ def page_to_dict(page: NotionPage) -> dict:
     d = asdict(page)
     d["chars"] = page.chars
     return d
+
+
+def write_knowledge_base(pages: list[NotionPage], root_page: str, path) -> None:
+    """Сохраняет выгруженные страницы в JSON (общий формат для sync и обновления)."""
+    import datetime as _dt
+    import json as _json
+    import pathlib as _pathlib
+
+    path = _pathlib.Path(path)
+    path.parent.mkdir(exist_ok=True)
+    payload = {
+        "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
+        "root_page": root_page,
+        "pages_count": len(pages),
+        "pages": [page_to_dict(p) for p in pages],
+    }
+    path.write_text(
+        _json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )

@@ -14,15 +14,16 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 from app.claude_answer import ClaudeAnswerer
 from app.handlers import setup_routers
+from app.knowledge_service import KnowledgeService
 from app.rag import Embedder, SearchIndex
 from config import load_config
 
 
-def load_knowledge(config):
-    """Загружает поисковый индекс, модель и клиента Claude (этапы 3–4).
+def build_knowledge(config) -> KnowledgeService:
+    """Собирает сервис знаний: индекс, модель поиска и клиент Claude (этапы 3–5).
 
-    Возвращает (index, embedder, answerer). Любой элемент может быть None,
-    если что-то ещё не готово — бот всё равно запустится (меню работает).
+    Любой элемент может быть None, если что-то ещё не готово — бот всё равно
+    запустится (меню работает), а недоступные разделы вежливо об этом скажут.
     """
     index = embedder = answerer = None
     try:
@@ -41,7 +42,18 @@ def load_knowledge(config):
     else:
         logging.warning("ANTHROPIC_API_KEY не задан — ответы Claude недоступны.")
 
-    return index, embedder, answerer
+    return KnowledgeService(config, index, embedder, answerer)
+
+
+async def auto_refresh_loop(knowledge: KnowledgeService, interval_min: int) -> None:
+    """Периодически перечитывает Notion (этап 5, «обновление по расписанию»)."""
+    while True:
+        await asyncio.sleep(interval_min * 60)
+        try:
+            pages, chunks = await asyncio.to_thread(knowledge.refresh)
+            logging.info("Автообновление базы: %d страниц, %d кусков.", pages, chunks)
+        except Exception:  # noqa: BLE001
+            logging.exception("Ошибка автообновления базы")
 
 
 async def main() -> None:
@@ -51,7 +63,7 @@ async def main() -> None:
     )
 
     config = load_config()
-    index, embedder, answerer = load_knowledge(config)
+    knowledge = build_knowledge(config)
 
     bot = Bot(
         token=config.bot_token,
@@ -63,17 +75,16 @@ async def main() -> None:
     me = await bot.get_me()
     logging.info("Бот запущен: @%s. Напишите ему /start в Telegram.", me.username)
 
+    # Автообновление базы по расписанию (0 в .env — выключено).
+    if config.refresh_interval_min > 0 and config.notion_token:
+        asyncio.create_task(auto_refresh_loop(knowledge, config.refresh_interval_min))
+        logging.info("Автообновление базы каждые %d мин.", config.refresh_interval_min)
+
     # Сбрасываем возможный старый вебхук и накопившиеся апдейты.
     await bot.delete_webhook(drop_pending_updates=True)
 
     # Зависимости прокидываются во все обработчики по имени аргумента.
-    await dp.start_polling(
-        bot,
-        config=config,
-        index=index,
-        embedder=embedder,
-        answerer=answerer,
-    )
+    await dp.start_polling(bot, config=config, knowledge=knowledge)
 
 
 if __name__ == "__main__":

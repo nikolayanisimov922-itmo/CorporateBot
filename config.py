@@ -18,6 +18,13 @@ def _get(name: str, default: str = "") -> str:
     return os.getenv(name, default).strip()
 
 
+def _int(value: str, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 @dataclass
 class Config:
     # --- Этап 1: нужно уже сейчас ---
@@ -31,6 +38,9 @@ class Config:
     # --- Этап 2: Notion (понадобится позже) ---
     notion_token: str = ""
     notion_root_page: str = ""
+
+    # --- Этап 5: автообновление базы (минуты; 0 — выключено) ---
+    refresh_interval_min: int = 60
 
     # --- Этап 7: Google Sheets (понадобится позже) ---
     google_sheet_id: str = ""
@@ -65,6 +75,7 @@ def load_config() -> Config:
         anthropic_model=_get("ANTHROPIC_MODEL", "claude-haiku-4-5"),
         notion_token=_get("NOTION_TOKEN"),
         notion_root_page=_get("NOTION_ROOT_PAGE"),
+        refresh_interval_min=_int(_get("REFRESH_INTERVAL_MIN", "60"), 60),
         google_sheet_id=_get("GOOGLE_SHEET_ID"),
         google_credentials_file=_get(
             "GOOGLE_CREDENTIALS_FILE", "google_credentials.json"

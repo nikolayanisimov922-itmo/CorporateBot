@@ -83,7 +83,40 @@ class NotionLoader:
     # --- публичный вход ---
     def load(self) -> list[NotionPage]:
         root_id = extract_page_id(self.root_page)
-        self._load_page(root_id)
+        print(f"ID головной страницы: {root_id}")
+
+        # Явно проверяем доступ к головной странице и даём понятную ошибку.
+        try:
+            self._client.pages.retrieve(page_id=root_id)
+            is_database = False
+        except APIResponseError as err:
+            status = getattr(err, "status", None)
+            if status == 401:
+                raise RuntimeError(
+                    "Токен Notion не принят (ошибка 401). Проверьте NOTION_TOKEN в .env: "
+                    "он должен начинаться на ntn_ (или secret_) и быть скопирован ЦЕЛИКОМ, "
+                    "без лишних пробелов и кавычек."
+                ) from err
+            if status == 404:
+                # Возможно, головная — это база данных, а не страница. Проверим.
+                try:
+                    self._client.databases.retrieve(database_id=root_id)
+                    is_database = True
+                except APIResponseError:
+                    raise RuntimeError(
+                        "Нет доступа к головной странице (ошибка 404). Убедитесь, что:\n"
+                        "   1) интеграция «CorporateBot» подключена ИМЕННО к головной "
+                        "странице «Ivan Ogienko - Knowledge Base» (••• → на этой странице "
+                        "→ поиск «connect» → Connections → CorporateBot);\n"
+                        "   2) ссылка NOTION_ROOT_PAGE в .env ведёт на эту же страницу."
+                    ) from err
+            else:
+                raise
+
+        if is_database:
+            self._load_database(root_id)
+        else:
+            self._load_page(root_id)
         return self.pages
 
     # --- обход одной страницы ---
@@ -152,6 +185,24 @@ class NotionLoader:
         if btype == "child_database":
             child_dbs.append(block["id"])
             return
+
+        # Ссылка на другую страницу/базу (оглавление, «link to page»).
+        if btype == "link_to_page":
+            body = block.get("link_to_page", {})
+            if body.get("type") == "page_id" and body.get("page_id"):
+                child_pages.append(body["page_id"])
+            elif body.get("type") == "database_id" and body.get("database_id"):
+                child_dbs.append(body["database_id"])
+            return
+
+        # Ссылки-упоминания страниц внутри текстовых блоков (@страница).
+        if btype in _TEXT_BLOCKS:
+            for part in block.get(btype, {}).get("rich_text", []):
+                mention = part.get("mention", {})
+                if mention.get("type") == "page":
+                    child_pages.append(mention["page"]["id"])
+                elif mention.get("type") == "database":
+                    child_dbs.append(mention["database"]["id"])
 
         if btype in _TEXT_BLOCKS:
             body = block.get(btype, {})

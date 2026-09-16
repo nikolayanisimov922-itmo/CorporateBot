@@ -11,7 +11,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
 
 from app import keyboards as kb
-from app.claude_answer import ClaudeAnswerer
+from app.claude_answer import ClaudeAnswerer, render_markdown
 from app.rag import Embedder, SearchIndex
 from config import Config
 
@@ -89,7 +89,7 @@ async def ask_question(
         if len(sources) >= 2:
             break
 
-    text = html.escape(answer)
+    text = render_markdown(answer)
     if sources:
         links = " · ".join(
             f"<a href=\"{html.escape(url)}\">{html.escape(title)}</a>"

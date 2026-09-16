@@ -1,6 +1,9 @@
 """Этап 4: ответы Claude строго по найденным кускам базы знаний."""
 from __future__ import annotations
 
+import html
+import re
+
 import anthropic
 
 from app.rag import SearchResult
@@ -13,8 +16,48 @@ SYSTEM_PROMPT = """Ты — корпоративный ассистент ком
 - Если во фрагментах нет ответа на вопрос — честно скажи, что в базе знаний такой \
 информации нет, и предложи посмотреть ближайшую по теме страницу.
 - Отвечай кратко и по делу, простым дружелюбным языком, на русском.
+- НЕ используй markdown-разметку: никаких #, *, **, обратных кавычек. Пиши обычным \
+текстом. Для списков используй перенос строки и, если нужно, знак • или дефис.
 - Не пиши слова «фрагмент», «контекст», «источник N» — просто дай ответ. Ссылку на \
 страницу добавит система отдельно."""
+
+
+def render_markdown(raw: str) -> str:
+    """Превращает остатки markdown в аккуратный текст для Telegram (HTML).
+
+    Заголовки (#) → жирный текст, **жирный** → жирный, списки → «•»,
+    лишние символы * и # убираются.
+    """
+    text = html.escape(raw)
+
+    # **жирный** и __жирный__ → настоящий жирный
+    text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
+    text = re.sub(r"__(.+?)__", r"<b>\1</b>", text)
+
+    out_lines = []
+    for line in text.split("\n"):
+        stripped = line.lstrip()
+        indent = line[: len(line) - len(stripped)]
+
+        header = re.match(r"#{1,6}\s+(.*)", stripped)
+        if header:
+            out_lines.append(f"{indent}<b>{header.group(1).strip()}</b>")
+            continue
+
+        bullet = re.match(r"[-*•]\s+(.*)", stripped)
+        if bullet:
+            out_lines.append(f"{indent}• {bullet.group(1)}")
+            continue
+
+        out_lines.append(line)
+
+    text = "\n".join(out_lines)
+
+    # Убираем оставшиеся одиночные * (курсив) и любые лишние # / *
+    text = re.sub(r"\*(\S[^*\n]*?\S|\S)\*", r"\1", text)
+    text = text.replace("**", "").replace("__", "")
+    text = re.sub(r"(?m)^\s*#{1,6}\s*", "", text)
+    return text.strip()
 
 
 def build_context(results: list[SearchResult]) -> str:

@@ -24,16 +24,6 @@ async def cmd_start(message: Message, config: Config) -> None:
     )
 
 
-@router.message(F.text == kb.BTN_KNOWLEDGE)
-async def on_knowledge(message: Message) -> None:
-    await message.answer(
-        "📚 <b>База знаний</b>\n\n"
-        "Здесь можно будет задать вопрос и получить ответ по базе компании "
-        "со ссылкой на источник.\n\n"
-        "⏳ Пока это заглушка — наполним на этапах 3–4."
-    )
-
-
 @router.message(F.text == kb.BTN_SEND_DATA)
 async def on_send_data(message: Message) -> None:
     await message.answer(

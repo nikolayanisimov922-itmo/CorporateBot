@@ -26,7 +26,7 @@ class Config:
 
     # --- Этап 4: Claude (понадобится позже) ---
     anthropic_api_key: str = ""
-    anthropic_model: str = "claude-haiku-4-5-20251001"
+    anthropic_model: str = "claude-haiku-4-5"
 
     # --- Этап 2: Notion (понадобится позже) ---
     notion_token: str = ""
@@ -62,7 +62,7 @@ def load_config() -> Config:
         bot_token=token,
         admin_id=admin_id,
         anthropic_api_key=_get("ANTHROPIC_API_KEY"),
-        anthropic_model=_get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001"),
+        anthropic_model=_get("ANTHROPIC_MODEL", "claude-haiku-4-5"),
         notion_token=_get("NOTION_TOKEN"),
         notion_root_page=_get("NOTION_ROOT_PAGE"),
         google_sheet_id=_get("GOOGLE_SHEET_ID"),

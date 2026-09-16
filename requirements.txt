@@ -9,5 +9,7 @@ notion-client>=2.2.1
 sentence-transformers>=3.0.0
 numpy>=1.24
 
-# Следующие этапы добавят сюда: anthropic (Claude),
-# gspread (Google Sheets), APScheduler.
+# Этап 4 — ответы через Claude
+anthropic>=0.40
+
+# Следующие этапы добавят сюда: gspread (Google Sheets), APScheduler.

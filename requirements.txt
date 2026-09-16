@@ -5,5 +5,9 @@ python-dotenv>=1.0.1
 # Этап 2 — чтение базы из Notion
 notion-client>=2.2.1
 
+# Этап 3 — локальный семантический поиск (RAG)
+sentence-transformers>=3.0.0
+numpy>=1.24
+
 # Следующие этапы добавят сюда: anthropic (Claude),
-# sentence-transformers + faiss (поиск), gspread (Google Sheets), APScheduler.
+# gspread (Google Sheets), APScheduler.

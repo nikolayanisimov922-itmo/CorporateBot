@@ -18,22 +18,29 @@ DATA_FILE = pathlib.Path("data") / "knowledge_base.json"
 def main() -> None:
     cfg = load_config()
 
-    if not cfg.notion_token or not cfg.notion_root_page:
+    if not cfg.notion_token:
         print(
-            "❌ Не заданы NOTION_TOKEN и/или NOTION_ROOT_PAGE в файле .env.\n"
-            "   Заполните их (см. инструкцию в SETUP.md, раздел «Этап 2») и повторите."
+            "❌ Не задан NOTION_TOKEN в файле .env.\n"
+            "   Заполните его (см. инструкцию в SETUP.md, раздел «Этап 2») и повторите."
         )
         return
 
-    print("Читаю базу знаний из Notion...\n")
-    loader = NotionLoader(cfg.notion_token, cfg.notion_root_page)
+    print("Читаю базу знаний из Notion (все страницы, доступные интеграции)...\n")
+    loader = NotionLoader(cfg.notion_token, cfg.notion_root_page or "")
     try:
-        pages = loader.load()
+        pages = loader.load_all_shared()
     except Exception as err:  # noqa: BLE001 — показываем пользователю понятную причину
         print(f"\n❌ Ошибка при чтении Notion: {err}")
         print(
-            "   Частые причины: интеграция не подключена к головной странице "
-            "(••• → Connections), неверный токен или ссылка."
+            "   Проверьте токен (python notion_check.py покажет, что видит интеграция)."
+        )
+        return
+
+    if not pages:
+        print(
+            "\n⚠️  Загружено 0 страниц. Интеграции не открыт доступ ни к одной странице.\n"
+            "   Откройте на головной странице базы: ••• → поиск «connect» → Connections\n"
+            "   → CorporateBot. Затем запустите снова."
         )
         return
 

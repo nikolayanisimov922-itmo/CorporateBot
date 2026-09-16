@@ -119,7 +119,47 @@ class NotionLoader:
             self._load_page(root_id)
         return self.pages
 
-    # --- обход одной страницы ---
+    # --- загрузка всех страниц, доступных интеграции (через search) ---
+    def load_all_shared(self) -> list[NotionPage]:
+        """Берёт все страницы, к которым открыт доступ интеграции.
+
+        Не требует ссылки на головную страницу: Notion сам отдаёт список
+        всего, что «расшарено» на интеграцию (через endpoint search).
+        """
+        cursor: Optional[str] = None
+        while True:
+            resp = self._client.search(start_cursor=cursor, page_size=100)
+            for obj in resp.get("results", []):
+                if obj.get("object") == "page":
+                    self._load_single_page(obj)
+            if not resp.get("has_more"):
+                break
+            cursor = resp.get("next_cursor")
+            time.sleep(0.2)  # бережём лимит Notion
+        return self.pages
+
+    def _load_single_page(self, meta: dict) -> None:
+        page_id = meta["id"].replace("-", "")
+        if page_id in self._visited:
+            return
+        self._visited.add(page_id)
+
+        title = self._page_title(meta)
+        url = meta.get("url") or f"https://www.notion.so/{page_id}"
+
+        lines: list[str] = []
+        skip: list[str] = []  # дочерние страницы придут отдельным элементом search
+        try:
+            self._read_blocks(page_id, lines, skip, skip)
+        except APIResponseError as err:
+            print(f"  ⚠ Пропускаю «{title}»: {err}")
+            return
+
+        text = "\n".join(line for line in lines if line.strip())
+        self.pages.append(NotionPage(id=page_id, title=title, url=url, text=text))
+        print(f"  ✓ {title} ({len(text)} симв.)")
+
+    # --- обход одной страницы (по ссылке на головную — оставлено для этапа 5) ---
     def _load_page(self, page_id: str) -> None:
         page_id = page_id.replace("-", "")
         if page_id in self._visited:

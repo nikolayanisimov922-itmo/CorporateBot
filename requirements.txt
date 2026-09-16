@@ -1,0 +1,6 @@
+# Этап 1 — каркас бота
+aiogram>=3.13,<4.0
+python-dotenv>=1.0.1
+
+# Следующие этапы добавят сюда: anthropic (Claude), notion-client,
+# sentence-transformers + faiss (поиск), gspread (Google Sheets), APScheduler.

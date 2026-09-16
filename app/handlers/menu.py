@@ -34,19 +34,6 @@ async def on_send_data(message: Message) -> None:
     )
 
 
-@router.message(F.text == kb.BTN_BROADCAST)
-async def on_broadcast(message: Message, config: Config) -> None:
-    # Дополнительная защита: кнопки нет в меню у обычных пользователей,
-    # но если кто-то введёт текст вручную — тоже не пропускаем.
-    if not config.is_admin(message.from_user.id):
-        return
-    await message.answer(
-        "📢 <b>Рассылка</b> (только для администратора)\n\n"
-        "Отсюда можно будет отправить объявление всем пользователям бота.\n\n"
-        "⏳ Пока это заглушка — сделаем на этапе 6."
-    )
-
-
 @router.message(F.text == kb.BTN_HELP)
 async def on_help(message: Message, config: Config) -> None:
     is_admin = config.is_admin(message.from_user.id)

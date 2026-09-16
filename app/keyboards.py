@@ -1,5 +1,10 @@
 """Клавиатуры и главное меню бота."""
-from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
+from aiogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+)
 
 # Тексты кнопок. Используются и для отрисовки меню, и для распознавания нажатий.
 BTN_KNOWLEDGE = "📚 База знаний"
@@ -8,6 +13,11 @@ BTN_BROADCAST = "📢 Рассылка"
 BTN_REFRESH = "🔄 Обновить базу"
 BTN_HELP = "ℹ️ Помощь"
 BTN_EXIT = "⬅️ Выйти в меню"
+BTN_CANCEL = "❌ Отмена"
+
+# callback_data для подтверждения рассылки
+CB_BROADCAST_SEND = "bcast_send"
+CB_BROADCAST_CANCEL = "bcast_cancel"
 
 
 def main_menu(is_admin: bool = False) -> ReplyKeyboardMarkup:
@@ -37,4 +47,29 @@ def knowledge_menu() -> ReplyKeyboardMarkup:
         keyboard=[[KeyboardButton(text=BTN_EXIT)]],
         resize_keyboard=True,
         input_field_placeholder="Задайте вопрос по базе…",
+    )
+
+
+def cancel_menu() -> ReplyKeyboardMarkup:
+    """Клавиатура с одной кнопкой «Отмена» (ввод текста рассылки)."""
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text=BTN_CANCEL)]],
+        resize_keyboard=True,
+        input_field_placeholder="Введите текст объявления…",
+    )
+
+
+def broadcast_confirm() -> InlineKeyboardMarkup:
+    """Кнопки подтверждения рассылки под предпросмотром."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Отправить всем", callback_data=CB_BROADCAST_SEND
+                ),
+                InlineKeyboardButton(
+                    text="❌ Отмена", callback_data=CB_BROADCAST_CANCEL
+                ),
+            ]
+        ]
     )

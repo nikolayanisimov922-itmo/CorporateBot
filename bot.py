@@ -15,7 +15,9 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from app.claude_answer import ClaudeAnswerer
 from app.handlers import setup_routers
 from app.knowledge_service import KnowledgeService
+from app.middlewares import RegisterUserMiddleware
 from app.rag import Embedder, SearchIndex
+from app.users import UserRegistry
 from config import load_config
 
 
@@ -67,12 +69,16 @@ async def main() -> None:
 
     config = load_config()
     knowledge = build_knowledge(config)
+    users = UserRegistry()
+    logging.info("Реестр пользователей: %d чел.", users.count())
 
     bot = Bot(
         token=config.bot_token,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     dp = Dispatcher(storage=MemoryStorage())
+    # Запоминаем каждого, кто пишет боту (для рассылок).
+    dp.update.outer_middleware(RegisterUserMiddleware(users))
     dp.include_router(setup_routers())
 
     me = await bot.get_me()
@@ -87,7 +93,7 @@ async def main() -> None:
     await bot.delete_webhook(drop_pending_updates=True)
 
     # Зависимости прокидываются во все обработчики по имени аргумента.
-    await dp.start_polling(bot, config=config, knowledge=knowledge)
+    await dp.start_polling(bot, config=config, knowledge=knowledge, users=users)
 
 
 if __name__ == "__main__":

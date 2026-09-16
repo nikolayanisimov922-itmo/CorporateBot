@@ -108,7 +108,7 @@ async def refresh_base(
     await message.answer("🔄 Обновляю базу из Notion, это займёт минуту…")
     await message.bot.send_chat_action(message.chat.id, "typing")
     try:
-        pages, chunks = await asyncio.to_thread(knowledge.refresh)
+        res = await asyncio.to_thread(knowledge.refresh)
     except Exception as err:  # noqa: BLE001
         logging.exception("Ошибка обновления базы")
         await message.answer(
@@ -117,8 +117,23 @@ async def refresh_base(
         )
         return
 
+    # Что изменилось со времени прошлой выгрузки.
+    if res.changed:
+        parts = []
+        if res.added:
+            parts.append(f"➕ новых: {res.added}")
+        if res.updated:
+            parts.append(f"✏️ изменённых: {res.updated}")
+        if res.removed:
+            parts.append(f"➖ удалённых: {res.removed}")
+        delta = "Изменения:\n" + "\n".join(parts)
+    else:
+        delta = "Изменений с прошлого раза нет."
+
     await message.answer(
-        f"✅ База обновлена: {pages} страниц ({chunks} кусков).\n"
+        f"✅ База обновлена.\n"
+        f"Всего в базе сейчас: <b>{res.pages}</b> страниц.\n\n"
+        f"{delta}\n\n"
         "Можно задавать вопросы — бот уже учитывает свежие данные.",
         reply_markup=kb.main_menu(is_admin=True),
     )

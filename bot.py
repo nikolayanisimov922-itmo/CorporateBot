@@ -50,8 +50,11 @@ async def auto_refresh_loop(knowledge: KnowledgeService, interval_min: int) -> N
     while True:
         await asyncio.sleep(interval_min * 60)
         try:
-            pages, chunks = await asyncio.to_thread(knowledge.refresh)
-            logging.info("Автообновление базы: %d страниц, %d кусков.", pages, chunks)
+            res = await asyncio.to_thread(knowledge.refresh)
+            logging.info(
+                "Автообновление базы: %d страниц (+%d/~%d/-%d).",
+                res.pages, res.added, res.updated, res.removed,
+            )
         except Exception:  # noqa: BLE001
             logging.exception("Ошибка автообновления базы")
 

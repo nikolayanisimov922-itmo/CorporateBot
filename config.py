@@ -43,6 +43,8 @@ class Config:
     # --- Этап 1: нужно уже сейчас ---
     bot_token: str
     admin_id: int
+    # Ник администратора в Telegram (без @) — для контакта в разделе «Помощь».
+    support_username: str = ""
 
     # --- Этап 4: Claude (понадобится позже) ---
     anthropic_api_key: str = ""
@@ -113,6 +115,7 @@ def load_config() -> Config:
     return Config(
         bot_token=token,
         admin_id=admin_id,
+        support_username=_get("SUPPORT_USERNAME").lstrip("@"),
         anthropic_api_key=_get("ANTHROPIC_API_KEY"),
         anthropic_model=_get("ANTHROPIC_MODEL", "claude-haiku-4-5"),
         notion_token=_get("NOTION_TOKEN"),

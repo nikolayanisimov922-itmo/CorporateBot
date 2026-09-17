@@ -36,7 +36,17 @@ async def on_help(message: Message, config: Config) -> None:
         text += "📢 <b>Рассылка</b> — отправить объявление всем (видно только вам).\n"
         text += "🔄 <b>Обновить базу</b> — перечитать Notion прямо сейчас.\n"
     text += "\nКоманда <code>/start</code> — открыть меню заново."
-    await message.answer(text, reply_markup=kb.main_menu(is_admin))
+
+    if config.support_username:
+        user = config.support_username
+        text += (
+            "\n\n🛠 <b>Нашли ошибку или хотите добавить функцию в бота?</b>\n"
+            f"Напишите Николаю: <a href=\"https://t.me/{user}\">@{user}</a>"
+        )
+
+    await message.answer(
+        text, reply_markup=kb.main_menu(is_admin), disable_web_page_preview=True
+    )
 
 
 @router.message()

@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from dotenv import load_dotenv
 
@@ -42,8 +42,9 @@ class Config:
     # --- Этап 5: автообновление базы (минуты; 0 — выключено) ---
     refresh_interval_min: int = 60
 
-    # --- Этап 7: Google Sheets (понадобится позже) ---
-    google_sheet_id: str = ""
+    # --- Этап 7: Google Sheets ---
+    # sheet_ids: {имя переменной из .env -> ID таблицы}. Своя таблица на каждую форму.
+    sheet_ids: dict = field(default_factory=dict)
     google_credentials_file: str = "google_credentials.json"
 
     def is_admin(self, user_id: int) -> bool:
@@ -68,6 +69,17 @@ def load_config() -> Config:
             "ADMIN_ID должен быть числом (узнать свой ID: напишите @userinfobot)."
         )
 
+    # Собираем ID таблиц по формам: каждая форма знает имя своей переменной .env.
+    from app.forms import FORMS
+
+    sheet_ids: dict[str, str] = {}
+    for form in FORMS.values():
+        env_name = form.get("sheet_env")
+        if env_name:
+            value = _get(env_name)
+            if value:
+                sheet_ids[env_name] = value
+
     return Config(
         bot_token=token,
         admin_id=admin_id,
@@ -76,7 +88,7 @@ def load_config() -> Config:
         notion_token=_get("NOTION_TOKEN"),
         notion_root_page=_get("NOTION_ROOT_PAGE"),
         refresh_interval_min=_int(_get("REFRESH_INTERVAL_MIN", "60"), 60),
-        google_sheet_id=_get("GOOGLE_SHEET_ID"),
+        sheet_ids=sheet_ids,
         google_credentials_file=_get(
             "GOOGLE_CREDENTIALS_FILE", "google_credentials.json"
         ),

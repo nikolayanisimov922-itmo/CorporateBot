@@ -26,9 +26,12 @@ class SubmitStates(StatesGroup):
 
 @router.message(F.text == kb.BTN_SEND_DATA)
 async def enter_submit(
-    message: Message, state: FSMContext, sheets: SheetsClient | None
+    message: Message,
+    state: FSMContext,
+    config: Config,
+    sheets: SheetsClient | None,
 ) -> None:
-    if sheets is None:
+    if sheets is None or not config.sheet_ids:
         await message.answer(
             "⚠️ Приём данных пока не настроен (не подключена Google-таблица). "
             "Загляните позже."
@@ -37,7 +40,7 @@ async def enter_submit(
     await state.set_state(SubmitStates.choosing)
     await message.answer(
         "📤 <b>Передать данные</b>\n\nВыберите, что хотите отправить:",
-        reply_markup=kb.submit_menu(),
+        reply_markup=kb.submit_menu(config.sheet_ids),
     )
 
 
@@ -52,11 +55,14 @@ async def cancel_choosing(
 
 
 @router.message(SubmitStates.choosing, F.text)
-async def choose_category(message: Message, state: FSMContext) -> None:
+async def choose_category(
+    message: Message, state: FSMContext, config: Config
+) -> None:
     form = form_by_title(message.text)
-    if form is None:
+    if form is None or form["sheet_env"] not in config.sheet_ids:
         await message.answer(
-            "Пожалуйста, выберите тип кнопкой ниже.", reply_markup=kb.submit_menu()
+            "Пожалуйста, выберите тип кнопкой ниже.",
+            reply_markup=kb.submit_menu(config.sheet_ids),
         )
         return
     await state.update_data(form_key=form["key"], field_index=0, answers={})
@@ -100,11 +106,12 @@ async def fill_field(
         )
         return
 
-    # Все ответы собраны — пишем строку в таблицу.
+    # Все ответы собраны — пишем строку в нужную таблицу.
     await state.clear()
     is_admin = config.is_admin(message.from_user.id)
 
-    if sheets is None:
+    sheet_id = config.sheet_ids.get(form["sheet_env"])
+    if sheets is None or not sheet_id:
         await message.answer(
             "⚠️ Google-таблица недоступна, запись не сохранена.",
             reply_markup=kb.main_menu(is_admin),
@@ -118,7 +125,9 @@ async def fill_field(
     row = [now, name, str(uid)] + [answers[f["key"]] for f in form["fields"]]
 
     try:
-        await asyncio.to_thread(sheets.append_row, form["sheet"], header, row)
+        await asyncio.to_thread(
+            sheets.append_row, sheet_id, form["worksheet"], header, row
+        )
     except Exception:  # noqa: BLE001
         logging.exception("Ошибка записи в Google Sheets")
         await message.answer(

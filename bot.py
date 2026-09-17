@@ -25,8 +25,10 @@ from config import load_config
 
 def build_sheets(config) -> SheetsClient | None:
     """Подключает Google Sheets (этап 7). None, если не настроено."""
-    if not config.google_sheet_id:
-        logging.warning("GOOGLE_SHEET_ID не задан — раздел «Передать данные» недоступен.")
+    if not config.sheet_ids:
+        logging.warning(
+            "Не задан ни один GOOGLE_SHEET_* — раздел «Передать данные» недоступен."
+        )
         return None
     if not os.path.exists(config.google_credentials_file):
         logging.warning(
@@ -35,8 +37,8 @@ def build_sheets(config) -> SheetsClient | None:
         )
         return None
     try:
-        client = SheetsClient(config.google_credentials_file, config.google_sheet_id)
-        logging.info("Google Sheets подключены.")
+        client = SheetsClient(config.google_credentials_file)
+        logging.info("Google Sheets подключены (%d табл.).", len(config.sheet_ids))
         return client
     except Exception:  # noqa: BLE001
         logging.exception("Не удалось подключить Google Sheets")

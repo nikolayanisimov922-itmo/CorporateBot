@@ -59,11 +59,18 @@ def cancel_menu(placeholder: str = "Введите текст…") -> ReplyKeybo
     )
 
 
-def submit_menu() -> ReplyKeyboardMarkup:
-    """Клавиатура выбора типа данных (этап 7). Строится из FORMS."""
+def submit_menu(sheet_ids: dict) -> ReplyKeyboardMarkup:
+    """Клавиатура выбора типа данных (этап 7).
+
+    Показываем только те формы, для которых настроена таблица (есть ID в .env).
+    """
     from app.forms import FORMS
 
-    rows = [[KeyboardButton(text=form["title"])] for form in FORMS.values()]
+    rows = [
+        [KeyboardButton(text=form["title"])]
+        for form in FORMS.values()
+        if form["sheet_env"] in sheet_ids
+    ]
     rows.append([KeyboardButton(text=BTN_CANCEL)])
     return ReplyKeyboardMarkup(
         keyboard=rows,

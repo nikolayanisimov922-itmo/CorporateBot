@@ -295,6 +295,64 @@ python bot.py
 
 ---
 
+# Этап 7. Приём данных → Google Sheets
+
+Цель: «📤 Передать данные» → выбор типа → пошаговый ввод → строка в таблице.
+
+## Часть 1. Создать Google-таблицу — 1 минута
+
+1. Создайте новую Google-таблицу (sheets.new).
+2. Скопируйте её **ID** из адреса. Ссылка вида
+   `https://docs.google.com/spreadsheets/d/`**`ЭТОТ_ДЛИННЫЙ_ID`**`/edit` — нужен кусок между `/d/` и `/edit`.
+
+## Часть 2. Сервисный доступ — 5 минут
+
+1. Откройте https://console.cloud.google.com → создайте **новый проект** (вверху слева).
+2. В поиске вверху найдите и включите **Google Sheets API** (кнопка **Enable**),
+   затем так же **Google Drive API**.
+3. Слева **APIs & Services → Credentials → Create credentials → Service account**.
+   Задайте имя (напр. `corporatebot`), создайте.
+4. Откройте созданный сервисный аккаунт → вкладка **Keys → Add key → Create new key →
+   тип JSON → Create**. Скачается файл `.json`.
+5. Переименуйте скачанный файл в **`google_credentials.json`** и положите в папку
+   `~/CorporateBot` (рядом с `bot.py`).
+   > Совет для Mac: `mv ~/Downloads/имя-файла.json ~/CorporateBot/google_credentials.json`
+6. Откройте этот JSON, найдите строку `"client_email": "...@...gserviceaccount.com"` —
+   скопируйте этот email.
+7. Вернитесь в свою Google-таблицу → кнопка **Настройки доступа (Share)** →
+   вставьте этот email → права **Редактор (Editor)** → отправить.
+
+## Часть 3. Вписать ID и запустить
+
+```bash
+cd ~/CorporateBot
+git pull
+source .venv/bin/activate
+pip install -r requirements.txt
+open -e .env
+```
+В `.env`:
+```
+GOOGLE_SHEET_ID=длинный_ID_таблицы
+GOOGLE_CREDENTIALS_FILE=google_credentials.json
+```
+Запустите бота:
+```bash
+python bot.py
+```
+В логе должно быть: «Google Sheets подключены».
+
+## Проверка ✅
+
+В Telegram: `/start` → **📤 Передать данные** → выберите **📋 Заявка** → ответьте на
+вопросы. В таблице появится новая строка (лист «Заявки») с датой, вашим именем и данными.
+Вам как админу придёт уведомление о новой записи.
+
+> Листы «Заявки», «Показания», «Обратная связь» бот создаёт сам при первой записи.
+> Добавить новые типы данных легко — скажите мне, впишу их в форму.
+
+---
+
 ## Если что-то пошло не так
 
 - `BOT_TOKEN не задан` — вы не сохранили `.env` или оставили токен пустым.

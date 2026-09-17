@@ -50,12 +50,25 @@ def knowledge_menu() -> ReplyKeyboardMarkup:
     )
 
 
-def cancel_menu() -> ReplyKeyboardMarkup:
-    """Клавиатура с одной кнопкой «Отмена» (ввод текста рассылки)."""
+def cancel_menu(placeholder: str = "Введите текст…") -> ReplyKeyboardMarkup:
+    """Клавиатура с одной кнопкой «Отмена»."""
     return ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text=BTN_CANCEL)]],
         resize_keyboard=True,
-        input_field_placeholder="Введите текст объявления…",
+        input_field_placeholder=placeholder,
+    )
+
+
+def submit_menu() -> ReplyKeyboardMarkup:
+    """Клавиатура выбора типа данных (этап 7). Строится из FORMS."""
+    from app.forms import FORMS
+
+    rows = [[KeyboardButton(text=form["title"])] for form in FORMS.values()]
+    rows.append([KeyboardButton(text=BTN_CANCEL)])
+    return ReplyKeyboardMarkup(
+        keyboard=rows,
+        resize_keyboard=True,
+        input_field_placeholder="Выберите тип данных…",
     )
 
 

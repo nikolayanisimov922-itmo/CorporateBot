@@ -6,6 +6,7 @@
 """
 import asyncio
 import logging
+import os
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -17,8 +18,29 @@ from app.handlers import setup_routers
 from app.knowledge_service import KnowledgeService
 from app.middlewares import RegisterUserMiddleware
 from app.rag import Embedder, SearchIndex
+from app.sheets import SheetsClient
 from app.users import UserRegistry
 from config import load_config
+
+
+def build_sheets(config) -> SheetsClient | None:
+    """Подключает Google Sheets (этап 7). None, если не настроено."""
+    if not config.google_sheet_id:
+        logging.warning("GOOGLE_SHEET_ID не задан — раздел «Передать данные» недоступен.")
+        return None
+    if not os.path.exists(config.google_credentials_file):
+        logging.warning(
+            "Файл %s не найден — раздел «Передать данные» недоступен.",
+            config.google_credentials_file,
+        )
+        return None
+    try:
+        client = SheetsClient(config.google_credentials_file, config.google_sheet_id)
+        logging.info("Google Sheets подключены.")
+        return client
+    except Exception:  # noqa: BLE001
+        logging.exception("Не удалось подключить Google Sheets")
+        return None
 
 
 def build_knowledge(config) -> KnowledgeService:
@@ -69,6 +91,7 @@ async def main() -> None:
 
     config = load_config()
     knowledge = build_knowledge(config)
+    sheets = build_sheets(config)
     users = UserRegistry()
     logging.info("Реестр пользователей: %d чел.", users.count())
 
@@ -93,7 +116,9 @@ async def main() -> None:
     await bot.delete_webhook(drop_pending_updates=True)
 
     # Зависимости прокидываются во все обработчики по имени аргумента.
-    await dp.start_polling(bot, config=config, knowledge=knowledge, users=users)
+    await dp.start_polling(
+        bot, config=config, knowledge=knowledge, users=users, sheets=sheets
+    )
 
 
 if __name__ == "__main__":

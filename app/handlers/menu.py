@@ -24,16 +24,6 @@ async def cmd_start(message: Message, config: Config) -> None:
     )
 
 
-@router.message(F.text == kb.BTN_SEND_DATA)
-async def on_send_data(message: Message) -> None:
-    await message.answer(
-        "📤 <b>Передать данные</b>\n\n"
-        "Здесь можно будет отправить заявку, показания или обратную связь — "
-        "они попадут в таблицу.\n\n"
-        "⏳ Пока это заглушка — сделаем на этапе 7."
-    )
-
-
 @router.message(F.text == kb.BTN_HELP)
 async def on_help(message: Message, config: Config) -> None:
     is_admin = config.is_admin(message.from_user.id)

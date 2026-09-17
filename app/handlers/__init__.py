@@ -1,7 +1,7 @@
 """Сборка всех роутеров бота в один."""
 from aiogram import Router
 
-from app.handlers import broadcast, knowledge, menu
+from app.handlers import broadcast, knowledge, menu, submit
 
 
 def setup_routers() -> Router:
@@ -10,5 +10,6 @@ def setup_routers() -> Router:
     # перехватывают сообщения, а fallback меню их не трогает.
     router.include_router(knowledge.router)
     router.include_router(broadcast.router)
+    router.include_router(submit.router)
     router.include_router(menu.router)
     return router

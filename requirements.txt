@@ -12,4 +12,6 @@ numpy>=1.24
 # Этап 4 — ответы через Claude
 anthropic>=0.40
 
-# Следующие этапы добавят сюда: gspread (Google Sheets), APScheduler.
+# Этап 7 — приём данных в Google Sheets
+gspread>=6.0.0
+google-auth>=2.0.0

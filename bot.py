@@ -4,6 +4,8 @@
 Работает на «длинных опросах» (long polling) — публичный адрес не нужен.
 Пока окно терминала открыто — бот отвечает. Закрыли — бот «спит».
 """
+from __future__ import annotations
+
 import asyncio
 import logging
 import os

@@ -42,12 +42,22 @@ async def exit_knowledge(message: Message, state: FSMContext, config: Config) ->
     await message.answer("Вышли из базы знаний.", reply_markup=kb.main_menu(is_admin))
 
 
-def _source_url(page_id: str, fallback: str, public_domain: str) -> str:
-    """Публичная ссылка на страницу Notion (если задан домен сайта), иначе — как есть."""
-    if public_domain:
-        domain = public_domain.replace("https://", "").replace("http://", "").strip("/")
-        return f"https://{domain}/{page_id.replace('-', '')}"
-    return fallback
+def _source_url(page_url: str, public_domain: str) -> str:
+    """Публичная ссылка на КОНКРЕТНУЮ страницу Notion.
+
+    Берём собственный адрес страницы (…/Заголовок-<id>) и меняем домен на
+    публичный сайт. Из public_domain используем только сам домен — даже если
+    вписали полную ссылку с путём.
+    """
+    if not public_domain or not page_url:
+        return page_url
+    host = (
+        public_domain.replace("https://", "").replace("http://", "").strip("/").split("/")[0]
+    )
+    slug = page_url.rstrip("/").split("/")[-1].split("?")[0]  # «Заголовок-<id>»
+    if not host or not slug:
+        return page_url
+    return f"https://{host}/{slug}"
 
 
 @router.message(KnowledgeStates.asking, F.text)
@@ -91,7 +101,7 @@ async def ask_question(
     for r in results:
         if not r.chunk.url or r.chunk.title in seen_titles:
             continue
-        url = _source_url(r.chunk.page_id, r.chunk.url, config.notion_public_domain)
+        url = _source_url(r.chunk.url, config.notion_public_domain)
         sources.append((r.chunk.title, url))
         seen_titles.add(r.chunk.title)
         if len(sources) >= 2:

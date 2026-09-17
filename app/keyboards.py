@@ -79,6 +79,21 @@ def submit_menu(sheet_ids: dict) -> ReplyKeyboardMarkup:
     )
 
 
+def broadcast_menu() -> ReplyKeyboardMarkup:
+    """Меню выбора типа рассылки (общая + пресеты по группам)."""
+    from app.broadcasts import GENERAL_TITLE, PRESETS
+
+    rows = [[KeyboardButton(text=GENERAL_TITLE)]]
+    for preset in PRESETS.values():
+        rows.append([KeyboardButton(text=preset["title"])])
+    rows.append([KeyboardButton(text=BTN_CANCEL)])
+    return ReplyKeyboardMarkup(
+        keyboard=rows,
+        resize_keyboard=True,
+        input_field_placeholder="Выберите тип рассылки…",
+    )
+
+
 def broadcast_confirm() -> InlineKeyboardMarkup:
     """Кнопки подтверждения рассылки под предпросмотром."""
     return InlineKeyboardMarkup(

@@ -25,6 +25,19 @@ def _int(value: str, default: int) -> int:
         return default
 
 
+def _ids(value: str) -> list[int]:
+    """Разбирает список Telegram ID из строки «123, 456 789»."""
+    out: list[int] = []
+    for part in value.replace(";", ",").replace(" ", ",").split(","):
+        part = part.strip()
+        if part:
+            try:
+                out.append(int(part))
+            except ValueError:
+                pass
+    return out
+
+
 @dataclass
 class Config:
     # --- Этап 1: нужно уже сейчас ---
@@ -38,6 +51,12 @@ class Config:
     # --- Этап 2: Notion (понадобится позже) ---
     notion_token: str = ""
     notion_root_page: str = ""
+    # Домен опубликованного сайта Notion (напр. mirror-psychology-ae8.notion.site).
+    # Если задан — бот даёт публичные ссылки, которые открываются у всех.
+    notion_public_domain: str = ""
+
+    # --- Этап 6: получатели адресных рассылок {имя переменной .env -> [ID]} ---
+    broadcast_ids: dict = field(default_factory=dict)
 
     # --- Этап 5: автообновление базы (минуты; 0 — выключено) ---
     refresh_interval_min: int = 60
@@ -80,6 +99,17 @@ def load_config() -> Config:
             if value:
                 sheet_ids[env_name] = value
 
+    # Списки получателей адресных рассылок по пресетам.
+    from app.broadcasts import PRESETS
+
+    broadcast_ids: dict[str, list] = {}
+    for preset in PRESETS.values():
+        env_name = preset.get("ids_env")
+        if env_name:
+            ids = _ids(_get(env_name))
+            if ids:
+                broadcast_ids[env_name] = ids
+
     return Config(
         bot_token=token,
         admin_id=admin_id,
@@ -87,6 +117,8 @@ def load_config() -> Config:
         anthropic_model=_get("ANTHROPIC_MODEL", "claude-haiku-4-5"),
         notion_token=_get("NOTION_TOKEN"),
         notion_root_page=_get("NOTION_ROOT_PAGE"),
+        notion_public_domain=_get("NOTION_PUBLIC_DOMAIN"),
+        broadcast_ids=broadcast_ids,
         refresh_interval_min=_int(_get("REFRESH_INTERVAL_MIN", "60"), 60),
         sheet_ids=sheet_ids,
         google_credentials_file=_get(

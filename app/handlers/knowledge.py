@@ -42,8 +42,18 @@ async def exit_knowledge(message: Message, state: FSMContext, config: Config) ->
     await message.answer("Вышли из базы знаний.", reply_markup=kb.main_menu(is_admin))
 
 
+def _source_url(page_id: str, fallback: str, public_domain: str) -> str:
+    """Публичная ссылка на страницу Notion (если задан домен сайта), иначе — как есть."""
+    if public_domain:
+        domain = public_domain.replace("https://", "").replace("http://", "").strip("/")
+        return f"https://{domain}/{page_id.replace('-', '')}"
+    return fallback
+
+
 @router.message(KnowledgeStates.asking, F.text)
-async def ask_question(message: Message, knowledge: KnowledgeService) -> None:
+async def ask_question(
+    message: Message, knowledge: KnowledgeService, config: Config
+) -> None:
     # Проверки готовности (индекс построен, ключ Claude задан).
     if not knowledge.ready:
         await message.answer(
@@ -75,12 +85,15 @@ async def ask_question(message: Message, knowledge: KnowledgeService) -> None:
         )
         return
 
-    # Ближайшие источники (до 2 уникальных страниц).
+    # Ближайшие источники (до 2 уникальных страниц), ссылки — публичные.
     sources: list[tuple[str, str]] = []
+    seen_titles: set[str] = set()
     for r in results:
-        pair = (r.chunk.title, r.chunk.url)
-        if r.chunk.url and pair not in sources:
-            sources.append(pair)
+        if not r.chunk.url or r.chunk.title in seen_titles:
+            continue
+        url = _source_url(r.chunk.page_id, r.chunk.url, config.notion_public_domain)
+        sources.append((r.chunk.title, url))
+        seen_titles.add(r.chunk.title)
         if len(sources) >= 2:
             break
 

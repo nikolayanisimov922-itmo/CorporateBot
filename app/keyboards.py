@@ -6,14 +6,15 @@ from aiogram.types import (
     ReplyKeyboardMarkup,
 )
 
-# Тексты кнопок. Используются и для отрисовки меню, и для распознавания нажатий.
-BTN_KNOWLEDGE = "📚 База знаний"
-BTN_SEND_DATA = "📤 Передать данные"
-BTN_BROADCAST = "📢 Рассылка"
-BTN_REFRESH = "🔄 Обновить базу"
-BTN_HELP = "ℹ️ Помощь"
-BTN_EXIT = "⬅️ Выйти в меню"
-BTN_CANCEL = "❌ Отмена"
+# Тексты кнопок — двуязычные, чтобы работали для всех независимо от языка.
+BTN_KNOWLEDGE = "📚 База знаний / Knowledge base"
+BTN_SEND_DATA = "📤 Передать данные / Submit data"
+BTN_BROADCAST = "📢 Рассылка / Broadcast"
+BTN_REFRESH = "🔄 Обновить базу / Refresh"
+BTN_HELP = "ℹ️ Помощь / Help"
+BTN_LANG = "🌐 English / Русский"
+BTN_EXIT = "⬅️ Выйти в меню / Back to menu"
+BTN_CANCEL = "❌ Отмена / Cancel"
 
 # callback_data для подтверждения рассылки
 CB_BROADCAST_SEND = "bcast_send"
@@ -32,7 +33,7 @@ def main_menu(is_admin: bool = False) -> ReplyKeyboardMarkup:
     if is_admin:
         rows.append([KeyboardButton(text=BTN_BROADCAST)])
         rows.append([KeyboardButton(text=BTN_REFRESH)])
-    rows.append([KeyboardButton(text=BTN_HELP)])
+    rows.append([KeyboardButton(text=BTN_HELP), KeyboardButton(text=BTN_LANG)])
 
     return ReplyKeyboardMarkup(
         keyboard=rows,

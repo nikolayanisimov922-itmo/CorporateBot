@@ -12,7 +12,7 @@
 """
 from __future__ import annotations
 
-GENERAL_TITLE = "📢 Общая рассылка"
+GENERAL_TITLE = "📢 Общая рассылка / General"
 
 PRESETS: dict[str, dict] = {
     "pm_friday": {

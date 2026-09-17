@@ -12,7 +12,9 @@ from aiogram.types import Message
 
 from app import keyboards as kb
 from app.claude_answer import render_markdown
+from app.i18n import t
 from app.knowledge_service import KnowledgeService
+from app.users import UserRegistry
 from config import Config
 
 router = Router()
@@ -25,21 +27,22 @@ class KnowledgeStates(StatesGroup):
 
 
 @router.message(F.text == kb.BTN_KNOWLEDGE)
-async def enter_knowledge(message: Message, state: FSMContext) -> None:
+async def enter_knowledge(
+    message: Message, state: FSMContext, users: UserRegistry
+) -> None:
     await state.set_state(KnowledgeStates.asking)
-    await message.answer(
-        "📚 <b>База знаний</b>\n\n"
-        "Задайте вопрос — найду ответ в базе компании и дам ссылку на источник.\n\n"
-        "Чтобы вернуться в меню — кнопка «⬅️ Выйти в меню».",
-        reply_markup=kb.knowledge_menu(),
-    )
+    lang = users.get_lang(message.from_user.id)
+    await message.answer(t("kb_enter", lang), reply_markup=kb.knowledge_menu())
 
 
 @router.message(KnowledgeStates.asking, F.text == kb.BTN_EXIT)
-async def exit_knowledge(message: Message, state: FSMContext, config: Config) -> None:
+async def exit_knowledge(
+    message: Message, state: FSMContext, config: Config, users: UserRegistry
+) -> None:
     await state.clear()
     is_admin = config.is_admin(message.from_user.id)
-    await message.answer("Вышли из базы знаний.", reply_markup=kb.main_menu(is_admin))
+    lang = users.get_lang(message.from_user.id)
+    await message.answer(t("kb_exit", lang), reply_markup=kb.main_menu(is_admin))
 
 
 def _source_url(page_url: str, public_domain: str) -> str:
@@ -62,22 +65,19 @@ def _source_url(page_url: str, public_domain: str) -> str:
 
 @router.message(KnowledgeStates.asking, F.text)
 async def ask_question(
-    message: Message, knowledge: KnowledgeService, config: Config
+    message: Message,
+    knowledge: KnowledgeService,
+    config: Config,
+    users: UserRegistry,
 ) -> None:
+    lang = users.get_lang(message.from_user.id)
+
     # Проверки готовности (индекс построен, ключ Claude задан).
     if not knowledge.ready:
-        await message.answer(
-            "⚠️ Поисковый индекс не готов. Постройте его командой "
-            "<code>python build_index.py</code> и перезапустите бота.",
-            reply_markup=kb.knowledge_menu(),
-        )
+        await message.answer(t("kb_not_ready", lang), reply_markup=kb.knowledge_menu())
         return
     if knowledge.answerer is None:
-        await message.answer(
-            "⚠️ Не задан ключ Claude (ANTHROPIC_API_KEY в .env). "
-            "Добавьте его и перезапустите бота.",
-            reply_markup=kb.knowledge_menu(),
-        )
+        await message.answer(t("kb_no_key", lang), reply_markup=kb.knowledge_menu())
         return
 
     question = message.text.strip()
@@ -86,13 +86,10 @@ async def ask_question(
     try:
         # Поиск — в отдельном потоке, чтобы не блокировать бота.
         results = await asyncio.to_thread(knowledge.search, question, TOP_K)
-        answer = await knowledge.answerer.answer(question, results)
+        answer = await knowledge.answerer.answer(question, results, lang)
     except Exception:  # noqa: BLE001
         logging.exception("Ошибка при ответе на вопрос")
-        await message.answer(
-            "😕 Не получилось получить ответ. Попробуйте ещё раз чуть позже.",
-            reply_markup=kb.knowledge_menu(),
-        )
+        await message.answer(t("kb_error", lang), reply_markup=kb.knowledge_menu())
         return
 
     # Ближайшие источники (до 2 уникальных страниц), ссылки — публичные.

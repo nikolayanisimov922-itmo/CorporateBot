@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import logging
 
 from aiogram import F, Router
@@ -20,8 +21,11 @@ from aiogram.types import CallbackQuery, Message
 
 from app import keyboards as kb
 from app.broadcasts import GENERAL_TITLE, preset_by_title
+from app.knowledge_service import KnowledgeService
 from app.users import UserRegistry
 from config import Config
+
+SEPARATOR = "\n———————————\n"
 
 router = Router()
 
@@ -112,12 +116,25 @@ async def cancel_writing(
 
 
 @router.message(BroadcastStates.writing, F.text)
-async def preview_general(message: Message, state: FSMContext) -> None:
+async def preview_general(
+    message: Message, state: FSMContext, knowledge: KnowledgeService
+) -> None:
+    # Общая рассылка всегда двуязычная: русский + разделитель + английский.
+    await message.bot.send_chat_action(message.chat.id, "typing")
+    body = message.html_text
+    if knowledge.answerer is not None:
+        try:
+            english = await knowledge.answerer.translate(message.text)
+            if english:
+                body = message.html_text + SEPARATOR + html.escape(english)
+        except Exception:  # noqa: BLE001
+            logging.warning("Не удалось перевести рассылку — отправлю только на русском")
+
     # target_ids=None означает «всем пользователям».
-    await state.update_data(text=message.html_text, target_ids=None)
+    await state.update_data(text=body, target_ids=None)
     await state.set_state(BroadcastStates.confirming)
     await message.answer("👇 Вот так будет выглядеть объявление:")
-    await message.answer(message.html_text, disable_web_page_preview=True)
+    await message.answer(body, disable_web_page_preview=True)
     await message.answer(
         "Отправить это объявление <b>всем</b>?", reply_markup=kb.broadcast_confirm()
     )

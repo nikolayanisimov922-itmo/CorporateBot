@@ -8,18 +8,28 @@ import anthropic
 
 from app.rag import SearchResult
 
-SYSTEM_PROMPT = """Ты — корпоративный ассистент компании. Отвечаешь сотрудникам на \
+_SYSTEM_BASE = """Ты — корпоративный ассистент компании. Отвечаешь сотрудникам на \
 вопросы, опираясь ТОЛЬКО на фрагменты базы знаний, которые тебе дают.
 
 Правила:
 - Используй только информацию из предоставленных фрагментов. Ничего не выдумывай.
 - Если во фрагментах нет ответа на вопрос — честно скажи, что в базе знаний такой \
 информации нет, и предложи посмотреть ближайшую по теме страницу.
-- Отвечай кратко и по делу, простым дружелюбным языком, на русском.
+- Отвечай кратко и по делу, простым дружелюбным языком.
 - НЕ используй markdown-разметку: никаких #, *, **, обратных кавычек. Пиши обычным \
 текстом. Для списков используй перенос строки и, если нужно, знак • или дефис.
 - Не пиши слова «фрагмент», «контекст», «источник N» — просто дай ответ. Ссылку на \
 страницу добавит система отдельно."""
+
+_LANG_RU = "\n- Отвечай на русском языке."
+_LANG_EN = (
+    "\n- База знаний на русском, но ты ОБЯЗАН отвечать на английском языке "
+    "(переводи содержание на английский). Answer in English."
+)
+
+
+def _system_prompt(lang: str) -> str:
+    return _SYSTEM_BASE + (_LANG_EN if lang == "en" else _LANG_RU)
 
 
 def render_markdown(raw: str) -> str:
@@ -76,12 +86,13 @@ class ClaudeAnswerer:
         self.client = anthropic.AsyncAnthropic(api_key=api_key)
         self.model = model
 
-    async def answer(self, question: str, results: list[SearchResult]) -> str:
+    async def answer(
+        self, question: str, results: list[SearchResult], lang: str = "ru"
+    ) -> str:
+        from app.i18n import t
+
         if not results:
-            return (
-                "В базе знаний нет информации по вашему вопросу. "
-                "Попробуйте переформулировать или уточнить у руководителя."
-            )
+            return t("kb_no_info", lang)
 
         context = build_context(results)
         user_content = (
@@ -92,7 +103,20 @@ class ClaudeAnswerer:
         resp = await self.client.messages.create(
             model=self.model,
             max_tokens=1024,
-            system=SYSTEM_PROMPT,
+            system=_system_prompt(lang),
             messages=[{"role": "user", "content": user_content}],
+        )
+        return "".join(b.text for b in resp.content if b.type == "text").strip()
+
+    async def translate(self, text: str, target: str = "English") -> str:
+        """Переводит текст (для двуязычных рассылок). Возвращает только перевод."""
+        resp = await self.client.messages.create(
+            model=self.model,
+            max_tokens=1500,
+            system=(
+                f"Translate the user's message to {target}. Keep line breaks and "
+                "meaning. Output ONLY the translation, without any comments."
+            ),
+            messages=[{"role": "user", "content": text}],
         )
         return "".join(b.text for b in resp.content if b.type == "text").strip()

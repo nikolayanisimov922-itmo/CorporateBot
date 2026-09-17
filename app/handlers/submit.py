@@ -12,8 +12,10 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
 
 from app import keyboards as kb
-from app.forms import FORMS, form_by_title
+from app.forms import FORMS, field_question, form_by_title
+from app.i18n import t
 from app.sheets import SheetsClient
+from app.users import UserRegistry
 from config import Config
 
 router = Router()
@@ -30,56 +32,59 @@ async def enter_submit(
     state: FSMContext,
     config: Config,
     sheets: SheetsClient | None,
+    users: UserRegistry,
 ) -> None:
+    lang = users.get_lang(message.from_user.id)
     if sheets is None or not config.sheet_ids:
-        await message.answer(
-            "⚠️ Приём данных пока не настроен (не подключена Google-таблица). "
-            "Загляните позже."
-        )
+        await message.answer(t("submit_not_configured", lang))
         return
     await state.set_state(SubmitStates.choosing)
     await message.answer(
-        "📤 <b>Передать данные</b>\n\nВыберите, что хотите отправить:",
-        reply_markup=kb.submit_menu(config.sheet_ids),
+        t("submit_enter", lang), reply_markup=kb.submit_menu(config.sheet_ids)
     )
 
 
 @router.message(SubmitStates.choosing, F.text == kb.BTN_CANCEL)
 async def cancel_choosing(
-    message: Message, state: FSMContext, config: Config
+    message: Message, state: FSMContext, config: Config, users: UserRegistry
 ) -> None:
     await state.clear()
+    lang = users.get_lang(message.from_user.id)
     await message.answer(
-        "Отменено.", reply_markup=kb.main_menu(config.is_admin(message.from_user.id))
+        t("cancelled", lang),
+        reply_markup=kb.main_menu(config.is_admin(message.from_user.id)),
     )
 
 
 @router.message(SubmitStates.choosing, F.text)
 async def choose_category(
-    message: Message, state: FSMContext, config: Config
+    message: Message, state: FSMContext, config: Config, users: UserRegistry
 ) -> None:
+    lang = users.get_lang(message.from_user.id)
     form = form_by_title(message.text)
     if form is None or form["sheet_env"] not in config.sheet_ids:
         await message.answer(
-            "Пожалуйста, выберите тип кнопкой ниже.",
+            t("submit_choose_hint", lang),
             reply_markup=kb.submit_menu(config.sheet_ids),
         )
         return
     await state.update_data(form_key=form["key"], field_index=0, answers={})
     await state.set_state(SubmitStates.filling)
     await message.answer(
-        f"{form['title']}\n\n{form['fields'][0]['q']}",
-        reply_markup=kb.cancel_menu("Введите ответ…"),
+        f"{form['title']}\n\n{field_question(form['fields'][0], lang)}",
+        reply_markup=kb.cancel_menu(),
     )
 
 
 @router.message(SubmitStates.filling, F.text == kb.BTN_CANCEL)
 async def cancel_filling(
-    message: Message, state: FSMContext, config: Config
+    message: Message, state: FSMContext, config: Config, users: UserRegistry
 ) -> None:
     await state.clear()
+    lang = users.get_lang(message.from_user.id)
     await message.answer(
-        "Отменено.", reply_markup=kb.main_menu(config.is_admin(message.from_user.id))
+        t("cancelled", lang),
+        reply_markup=kb.main_menu(config.is_admin(message.from_user.id)),
     )
 
 
@@ -89,7 +94,9 @@ async def fill_field(
     state: FSMContext,
     config: Config,
     sheets: SheetsClient | None,
+    users: UserRegistry,
 ) -> None:
+    lang = users.get_lang(message.from_user.id)
     data = await state.get_data()
     form = FORMS[data["form_key"]]
     idx = data["field_index"]
@@ -102,7 +109,7 @@ async def fill_field(
     if idx < len(form["fields"]):
         await state.update_data(field_index=idx, answers=answers)
         await message.answer(
-            form["fields"][idx]["q"], reply_markup=kb.cancel_menu("Введите ответ…")
+            field_question(form["fields"][idx], lang), reply_markup=kb.cancel_menu()
         )
         return
 
@@ -112,10 +119,7 @@ async def fill_field(
 
     sheet_id = config.sheet_ids.get(form["sheet_env"])
     if sheets is None or not sheet_id:
-        await message.answer(
-            "⚠️ Google-таблица недоступна, запись не сохранена.",
-            reply_markup=kb.main_menu(is_admin),
-        )
+        await message.answer(t("submit_error", lang), reply_markup=kb.main_menu(is_admin))
         return
 
     now = dt.datetime.now().strftime("%d.%m.%Y %H:%M")
@@ -130,16 +134,10 @@ async def fill_field(
         )
     except Exception:  # noqa: BLE001
         logging.exception("Ошибка записи в Google Sheets")
-        await message.answer(
-            "❌ Не получилось сохранить данные. Попробуйте позже или сообщите администратору.",
-            reply_markup=kb.main_menu(is_admin),
-        )
+        await message.answer(t("submit_error", lang), reply_markup=kb.main_menu(is_admin))
         return
 
-    await message.answer(
-        f"✅ Готово! Ваша запись «{form['title']}» сохранена. Спасибо!",
-        reply_markup=kb.main_menu(is_admin),
-    )
+    await message.answer(t("submit_saved", lang), reply_markup=kb.main_menu(is_admin))
 
     # Уведомление админу о новой записи (если это не он сам).
     if config.admin_id and uid != config.admin_id:

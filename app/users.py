@@ -40,6 +40,7 @@ class UserRegistry:
             self._users[key] = {
                 "name": name,
                 "username": username,
+                "lang": "ru",
                 "first_seen": dt.datetime.now().isoformat(timespec="seconds"),
             }
             self._save()
@@ -47,6 +48,14 @@ class UserRegistry:
             existing["name"] = name
             existing["username"] = username
             self._save()
+
+    def get_lang(self, user_id: int) -> str:
+        return self._users.get(str(user_id), {}).get("lang", "ru")
+
+    def set_lang(self, user_id: int, lang: str) -> None:
+        entry = self._users.setdefault(str(user_id), {})
+        entry["lang"] = lang
+        self._save()
 
     def all_ids(self) -> list[int]:
         return [int(k) for k in self._users]

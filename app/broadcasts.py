@@ -28,7 +28,10 @@ PRESETS: dict[str, dict] = {
         "key": "komplekt_friday",
         "title": "📦 Комплектаторы (пятница)",
         "ids_env": "KOMPLEKT_IDS",
-        "message": "Не забудьте передать выработку сегодня.",
+        "message": (
+            "🇷🇺 Не забудьте передать выработку сегодня.\n\n"
+            "🇬🇧 Please remember to submit your output today."
+        ),
     },
 }
 

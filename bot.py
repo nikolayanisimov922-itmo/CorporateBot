@@ -25,6 +25,24 @@ from app.users import UserRegistry
 from config import load_config
 
 
+def _ensure_google_credentials_file(config) -> None:
+    """На хостинге ключ удобно передавать переменной GOOGLE_CREDENTIALS_JSON.
+
+    Если она задана, а файла нет — создаём файл из её содержимого.
+    """
+    creds_json = os.getenv("GOOGLE_CREDENTIALS_JSON", "").strip()
+    if creds_json and not os.path.exists(config.google_credentials_file):
+        try:
+            import pathlib
+
+            pathlib.Path(config.google_credentials_file).write_text(
+                creds_json, encoding="utf-8"
+            )
+            logging.info("Файл ключа Google создан из GOOGLE_CREDENTIALS_JSON.")
+        except OSError:
+            logging.exception("Не удалось записать файл ключа Google")
+
+
 def build_sheets(config) -> SheetsClient | None:
     """Подключает Google Sheets (этап 7). None, если не настроено."""
     if not config.sheet_ids:
@@ -32,6 +50,7 @@ def build_sheets(config) -> SheetsClient | None:
             "Не задан ни один GOOGLE_SHEET_* — раздел «Передать данные» недоступен."
         )
         return None
+    _ensure_google_credentials_file(config)
     if not os.path.exists(config.google_credentials_file):
         logging.warning(
             "Файл %s не найден — раздел «Передать данные» недоступен.",
@@ -59,10 +78,7 @@ def build_knowledge(config) -> KnowledgeService:
         embedder = Embedder()
         logging.info("Поисковый индекс загружен: %d кусков.", len(index.chunks))
     except FileNotFoundError:
-        logging.warning(
-            "Индекс не найден — раздел «База знаний» недоступен. "
-            "Постройте: python build_index.py"
-        )
+        logging.warning("Индекс не найден.")
 
     if config.anthropic_api_key:
         answerer = ClaudeAnswerer(config.anthropic_api_key, config.anthropic_model)
@@ -70,7 +86,17 @@ def build_knowledge(config) -> KnowledgeService:
     else:
         logging.warning("ANTHROPIC_API_KEY не задан — ответы Claude недоступны.")
 
-    return KnowledgeService(config, index, embedder, answerer)
+    service = KnowledgeService(config, index, embedder, answerer)
+
+    # На хостинге индекса ещё нет — строим сами из Notion при первом запуске.
+    if service.index is None and config.notion_token:
+        logging.info("Строю поисковый индекс из Notion при старте (это займёт минуту)…")
+        try:
+            service.refresh()
+        except Exception:  # noqa: BLE001
+            logging.exception("Не удалось построить индекс при старте")
+
+    return service
 
 
 async def auto_refresh_loop(knowledge: KnowledgeService, interval_min: int) -> None:

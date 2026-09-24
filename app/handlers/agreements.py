@@ -148,6 +148,16 @@ async def get_voice(
 
     await message.answer(t("agr_saved", lang), reply_markup=kb.main_menu(is_admin))
 
+    # Короткое уведомление администратору (только ему, от этого же бота).
+    if config.admin_id and message.from_user.id != config.admin_id:
+        try:
+            await message.bot.send_message(
+                config.admin_id,
+                "🤝 Сотрудник оставил новую договорённость с клиентом.",
+            )
+        except Exception:  # noqa: BLE001
+            logging.warning("Не удалось отправить уведомление админу о договорённости")
+
 
 @router.message(AgreementStates.voice)
 async def not_a_voice(message: Message, users: UserRegistry) -> None:

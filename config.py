@@ -101,6 +101,12 @@ def load_config() -> Config:
             if value:
                 sheet_ids[env_name] = value
 
+    # Отдельная таблица для «Договорённости с клиентом».
+    for env_name in ("GOOGLE_SHEET_AGREEMENTS",):
+        value = _get(env_name)
+        if value:
+            sheet_ids[env_name] = value
+
     # Списки получателей адресных рассылок по пресетам.
     from app.broadcasts import PRESETS
 

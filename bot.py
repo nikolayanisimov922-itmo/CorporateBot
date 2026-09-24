@@ -21,6 +21,7 @@ from app.knowledge_service import KnowledgeService
 from app.middlewares import RegisterUserMiddleware
 from app.rag import Embedder, SearchIndex
 from app.sheets import SheetsClient
+from app.transcribe import Transcriber
 from app.users import UserRegistry
 from config import load_config
 
@@ -122,6 +123,7 @@ async def main() -> None:
     config = load_config()
     knowledge = build_knowledge(config)
     sheets = build_sheets(config)
+    transcriber = Transcriber()  # модель речи грузится лениво, при первом голосовом
     users = UserRegistry()
     logging.info("Реестр пользователей: %d чел.", users.count())
 
@@ -147,7 +149,12 @@ async def main() -> None:
 
     # Зависимости прокидываются во все обработчики по имени аргумента.
     await dp.start_polling(
-        bot, config=config, knowledge=knowledge, users=users, sheets=sheets
+        bot,
+        config=config,
+        knowledge=knowledge,
+        users=users,
+        sheets=sheets,
+        transcriber=transcriber,
     )
 
 

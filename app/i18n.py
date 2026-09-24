@@ -124,6 +124,45 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "⚠️ Data submission is not set up yet. Please check back later.",
     },
     "cancelled": {"ru": "Отменено.", "en": "Cancelled."},
+    # --- Договорённости с клиентом ---
+    "agr_ask_project": {
+        "ru": "Введите номер проекта в формате <b>123-45</b> (3 цифры – дефис – 2 цифры):",
+        "en": "Enter the project number in the format <b>123-45</b> (3 digits – dash – 2 digits):",
+    },
+    "agr_bad_project": {
+        "ru": "Неверный формат. Нужно 3 цифры, дефис, 2 цифры — например 123-45. Попробуйте ещё раз:",
+        "en": "Wrong format. Need 3 digits, a dash, 2 digits — e.g. 123-45. Try again:",
+    },
+    "agr_ask_voice": {
+        "ru": (
+            "Супер, что у вас состоялась встреча с клиентом! 🎙\n\n"
+            "Зафиксируйте ключевые договорённости <b>голосовым сообщением</b>."
+        ),
+        "en": (
+            "Great that you had a meeting with the client! 🎙\n\n"
+            "Record the key agreements as a <b>voice message</b>."
+        ),
+    },
+    "agr_need_voice": {
+        "ru": "Пожалуйста, отправьте именно <b>голосовое сообщение</b> (или нажмите «Отмена»).",
+        "en": "Please send a <b>voice message</b> (or press «Cancel»).",
+    },
+    "agr_processing": {
+        "ru": "Обрабатываю запись, это займёт минуту… ⏳",
+        "en": "Processing your recording, it will take a minute… ⏳",
+    },
+    "agr_saved": {
+        "ru": "✅ Готово, всё зафиксировано!",
+        "en": "✅ Done, everything is recorded!",
+    },
+    "agr_error": {
+        "ru": "❌ Не получилось сохранить. Попробуйте записать голосовое ещё раз.",
+        "en": "❌ Couldn't save. Please try recording the voice message again.",
+    },
+    "agr_not_configured": {
+        "ru": "⚠️ Функция пока не настроена. Сообщите администратору.",
+        "en": "⚠️ This feature is not set up yet. Please contact the administrator.",
+    },
 }
 
 

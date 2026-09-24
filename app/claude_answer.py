@@ -108,6 +108,29 @@ class ClaudeAnswerer:
         )
         return "".join(b.text for b in resp.content if b.type == "text").strip()
 
+    async def structure_notes(self, transcript: str, lang: str = "ru") -> str:
+        """Приводит расшифровку встречи в аккуратный вид. СТРОГО без домыслов."""
+        system = (
+            "Ты приводишь в аккуратный, структурированный вид расшифровку голосовой "
+            "заметки сотрудника о встрече с клиентом.\n"
+            "СТРОГИЕ правила:\n"
+            "- Только структурируй и причёсывай то, что реально сказал сотрудник.\n"
+            "- НИЧЕГО не добавляй, не выдумывай, не делай выводов и предположений.\n"
+            "- Сохрани все факты, цифры, имена и сроки без искажений.\n"
+            "- Убери слова-паразиты, оговорки и повторы; исправь очевидные ошибки "
+            "распознавания речи.\n"
+            "- Оформи связным текстом или короткими пунктами. Без markdown-символов "
+            "(#, *, **).\n"
+            "- Пиши на том же языке, на котором говорил сотрудник."
+        )
+        resp = await self.client.messages.create(
+            model=self.model,
+            max_tokens=1500,
+            system=system,
+            messages=[{"role": "user", "content": transcript}],
+        )
+        return "".join(b.text for b in resp.content if b.type == "text").strip()
+
     async def translate(self, text: str, target: str = "English") -> str:
         """Переводит текст (для двуязычных рассылок). Возвращает только перевод."""
         resp = await self.client.messages.create(

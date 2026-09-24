@@ -9,6 +9,7 @@ from aiogram.types import (
 # Тексты кнопок — двуязычные, чтобы работали для всех независимо от языка.
 BTN_KNOWLEDGE = "📚 База знаний / Knowledge base"
 BTN_SEND_DATA = "📤 Передать данные / Submit data"
+BTN_AGREEMENTS = "🤝 Договорённости / Client notes"
 BTN_BROADCAST = "📢 Рассылка / Broadcast"
 BTN_REFRESH = "🔄 Обновить базу / Refresh"
 BTN_HELP = "ℹ️ Помощь / Help"
@@ -29,6 +30,7 @@ def main_menu(is_admin: bool = False) -> ReplyKeyboardMarkup:
     rows = [
         [KeyboardButton(text=BTN_KNOWLEDGE)],
         [KeyboardButton(text=BTN_SEND_DATA)],
+        [KeyboardButton(text=BTN_AGREEMENTS)],
     ]
     if is_admin:
         rows.append([KeyboardButton(text=BTN_BROADCAST)])

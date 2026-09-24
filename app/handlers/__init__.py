@@ -1,7 +1,7 @@
 """Сборка всех роутеров бота в один."""
 from aiogram import Router
 
-from app.handlers import broadcast, knowledge, menu, submit
+from app.handlers import agreements, broadcast, knowledge, menu, submit
 
 
 def setup_routers() -> Router:
@@ -11,5 +11,6 @@ def setup_routers() -> Router:
     router.include_router(knowledge.router)
     router.include_router(broadcast.router)
     router.include_router(submit.router)
+    router.include_router(agreements.router)
     router.include_router(menu.router)
     return router

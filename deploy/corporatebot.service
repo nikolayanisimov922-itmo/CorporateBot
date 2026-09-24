@@ -1,10 +1,10 @@
-# systemd-служба для запуска бота 24/7 на VPS.
-# Установка (пути под своего пользователя/папку поправить):
-#   sudo cp deploy/corporatebot.service /etc/systemd/system/
-#   sudo systemctl daemon-reload
-#   sudo systemctl enable --now corporatebot
-# Логи:      journalctl -u corporatebot -f
-# Рестарт:   sudo systemctl restart corporatebot
+# systemd-служба для запуска бота 24/7 на сервере (Hetzner, пользователь root).
+# Установка:
+#   cp deploy/corporatebot.service /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now corporatebot
+# Логи:     journalctl -u corporatebot -f
+# Рестарт:  systemctl restart corporatebot
 
 [Unit]
 Description=CorporateBot (Telegram)
@@ -13,9 +13,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=ubuntu
-WorkingDirectory=/home/ubuntu/CorporateBot
-ExecStart=/home/ubuntu/CorporateBot/.venv/bin/python bot.py
+User=root
+WorkingDirectory=/root/CorporateBot
+ExecStart=/root/CorporateBot/.venv/bin/python bot.py
 Restart=always
 RestartSec=5
 

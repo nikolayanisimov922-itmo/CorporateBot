@@ -10,7 +10,6 @@ import asyncio
 import datetime as dt
 import logging
 import os
-import re
 import uuid
 
 from aiogram import F, Router
@@ -30,7 +29,6 @@ router = Router()
 
 AGREEMENTS_SHEET_ENV = "GOOGLE_SHEET_AGREEMENTS"
 AGREEMENTS_WORKSHEET = "Договорённости"
-PROJECT_RE = re.compile(r"^\d{3}-\d{2}$")
 
 
 class AgreementStates(StatesGroup):
@@ -76,11 +74,11 @@ async def get_project(
     message: Message, state: FSMContext, users: UserRegistry
 ) -> None:
     lang = users.get_lang(message.from_user.id)
-    number = message.text.strip()
-    if not PROJECT_RE.match(number):
-        await message.answer(t("agr_bad_project", lang), reply_markup=kb.cancel_menu())
+    project = message.text.strip()
+    if not project:  # на всякий случай: пустое — спрашиваем снова
+        await message.answer(t("agr_ask_project", lang), reply_markup=kb.cancel_menu())
         return
-    await state.update_data(project=number)
+    await state.update_data(project=project)
     await state.set_state(AgreementStates.voice)
     await message.answer(t("agr_ask_voice", lang), reply_markup=kb.cancel_menu())
 

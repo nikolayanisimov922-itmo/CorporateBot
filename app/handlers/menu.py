@@ -40,6 +40,7 @@ async def on_help(message: Message, config: Config, users: UserRegistry) -> None
     if is_admin:
         lines.append(t("help_admin_broadcast", lang))
         lines.append(t("help_admin_refresh", lang))
+        lines.append(t("help_admin_balance", lang))
     lines.append(t("help_lang", lang))
     lines.append("")
     lines.append(t("help_start_note", lang))

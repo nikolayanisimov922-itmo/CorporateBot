@@ -12,6 +12,7 @@ BTN_SEND_DATA = "📤 Передать данные / Submit data"
 BTN_AGREEMENTS = "🤝 Договорённости / Client notes"
 BTN_BROADCAST = "📢 Рассылка / Broadcast"
 BTN_REFRESH = "🔄 Обновить базу / Refresh"
+BTN_BALANCE = "💰 Баланс / Balance"
 BTN_HELP = "ℹ️ Помощь / Help"
 BTN_LANG = "🌐 English / Русский"
 BTN_EXIT = "⬅️ Выйти в меню / Back to menu"
@@ -35,6 +36,7 @@ def main_menu(is_admin: bool = False) -> ReplyKeyboardMarkup:
     if is_admin:
         rows.append([KeyboardButton(text=BTN_BROADCAST)])
         rows.append([KeyboardButton(text=BTN_REFRESH)])
+        rows.append([KeyboardButton(text=BTN_BALANCE)])
     rows.append([KeyboardButton(text=BTN_HELP), KeyboardButton(text=BTN_LANG)])
 
     return ReplyKeyboardMarkup(

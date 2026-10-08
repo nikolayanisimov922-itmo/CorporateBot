@@ -82,9 +82,22 @@ def build_context(results: list[SearchResult]) -> str:
 class ClaudeAnswerer:
     """Обёртка над Claude API. Async — не блокирует бота."""
 
-    def __init__(self, api_key: str, model: str) -> None:
+    def __init__(self, api_key: str, model: str, billing=None) -> None:
         self.client = anthropic.AsyncAnthropic(api_key=api_key)
         self.model = model
+        self.billing = billing  # BillingMonitor: учёт трат и тревога «деньги кончились»
+
+    async def _create(self, **kwargs):
+        """Вызов Claude + учёт расходов. Ошибку пробрасываем дальше как есть."""
+        try:
+            resp = await self.client.messages.create(model=self.model, **kwargs)
+        except anthropic.APIStatusError as err:
+            if self.billing is not None:
+                await self.billing.on_api_error(err)
+            raise
+        if self.billing is not None:
+            await self.billing.record_usage(self.model, resp.usage)
+        return resp
 
     async def answer(
         self, question: str, results: list[SearchResult], lang: str = "ru"
@@ -100,8 +113,7 @@ class ClaudeAnswerer:
             f"Фрагменты базы знаний, на которые нужно опираться:\n\n{context}"
         )
 
-        resp = await self.client.messages.create(
-            model=self.model,
+        resp = await self._create(
             max_tokens=1024,
             system=_system_prompt(lang),
             messages=[{"role": "user", "content": user_content}],
@@ -123,8 +135,7 @@ class ClaudeAnswerer:
             "(#, *, **).\n"
             "- Пиши на том же языке, на котором говорил сотрудник."
         )
-        resp = await self.client.messages.create(
-            model=self.model,
+        resp = await self._create(
             max_tokens=1500,
             system=system,
             messages=[{"role": "user", "content": transcript}],
@@ -133,8 +144,7 @@ class ClaudeAnswerer:
 
     async def translate(self, text: str, target: str = "English") -> str:
         """Переводит текст (для двуязычных рассылок). Возвращает только перевод."""
-        resp = await self.client.messages.create(
-            model=self.model,
+        resp = await self._create(
             max_tokens=1500,
             system=(
                 f"Translate the user's message to {target}. Keep line breaks and "

@@ -49,6 +49,10 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "🔄 <b>Обновить базу</b> — перечитать Notion прямо сейчас.",
         "en": "🔄 <b>Refresh base</b> — re-read Notion right now.",
     },
+    "help_admin_balance": {
+        "ru": "💰 <b>Баланс</b> — сколько денег осталось на Claude; сюда же вводить сумму после пополнения.",
+        "en": "💰 <b>Balance</b> — Claude credit left; enter the new amount here after a top-up.",
+    },
     "help_start_note": {
         "ru": "Команда <code>/start</code> — открыть меню заново.",
         "en": "Command <code>/start</code> — open the menu again.",

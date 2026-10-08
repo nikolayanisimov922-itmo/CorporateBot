@@ -25,6 +25,13 @@ def _int(value: str, default: int) -> int:
         return default
 
 
+def _float(value: str, default: float) -> float:
+    try:
+        return float(value.replace(",", "."))
+    except (AttributeError, ValueError):
+        return default
+
+
 def _ids(value: str) -> list[int]:
     """Разбирает список Telegram ID из строки «123, 456 789»."""
     out: list[int] = []
@@ -67,6 +74,14 @@ class Config:
     # sheet_ids: {имя переменной из .env -> ID таблицы}. Своя таблица на каждую форму.
     sheet_ids: dict = field(default_factory=dict)
     google_credentials_file: str = "google_credentials.json"
+
+    # --- Контроль денег: Claude и хостинг ---
+    # Предупредить, когда на Claude останется меньше этой суммы ($).
+    claude_low_balance_usd: float = 2.0
+    # День месяца для напоминания об оплате Hetzner (0 — выключено).
+    hosting_reminder_day: int = 1
+    # Необязательная подпись к напоминанию, напр. «≈ 5 €».
+    hosting_monthly_cost: str = ""
 
     def is_admin(self, user_id: int) -> bool:
         """True только для владельца бота (по числовому Telegram ID)."""
@@ -133,4 +148,8 @@ def load_config() -> Config:
         google_credentials_file=_get(
             "GOOGLE_CREDENTIALS_FILE", "google_credentials.json"
         ),
+        claude_low_balance_usd=_float(_get("CLAUDE_LOW_BALANCE_USD", "2"), 2.0),
+        # 1–28, чтобы день существовал в любом месяце; 0 — выключено.
+        hosting_reminder_day=max(0, min(28, _int(_get("HOSTING_REMINDER_DAY", "1"), 1))),
+        hosting_monthly_cost=_get("HOSTING_MONTHLY_COST"),
     )

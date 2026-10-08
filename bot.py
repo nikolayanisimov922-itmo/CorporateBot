@@ -15,6 +15,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 
+from app.billing import BillingMonitor
 from app.claude_answer import ClaudeAnswerer
 from app.handlers import setup_routers
 from app.knowledge_service import KnowledgeService
@@ -67,7 +68,7 @@ def build_sheets(config) -> SheetsClient | None:
         return None
 
 
-def build_knowledge(config) -> KnowledgeService:
+def build_knowledge(config, billing: BillingMonitor) -> KnowledgeService:
     """Собирает сервис знаний: индекс, модель поиска и клиент Claude (этапы 3–5).
 
     Любой элемент может быть None, если что-то ещё не готово — бот всё равно
@@ -82,7 +83,9 @@ def build_knowledge(config) -> KnowledgeService:
         logging.warning("Индекс не найден.")
 
     if config.anthropic_api_key:
-        answerer = ClaudeAnswerer(config.anthropic_api_key, config.anthropic_model)
+        answerer = ClaudeAnswerer(
+            config.anthropic_api_key, config.anthropic_model, billing=billing
+        )
         logging.info("Claude подключён (модель %s).", config.anthropic_model)
     else:
         logging.warning("ANTHROPIC_API_KEY не задан — ответы Claude недоступны.")
@@ -114,6 +117,16 @@ async def auto_refresh_loop(knowledge: KnowledgeService, interval_min: int) -> N
             logging.exception("Ошибка автообновления базы")
 
 
+async def money_watch_loop(billing: BillingMonitor) -> None:
+    """Раз в час проверяет, не пора ли напомнить про оплату хостинга."""
+    while True:
+        try:
+            await billing.check_hosting_reminder()
+        except Exception:  # noqa: BLE001
+            logging.exception("Ошибка проверки напоминания об оплате")
+        await asyncio.sleep(60 * 60)
+
+
 async def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -121,7 +134,12 @@ async def main() -> None:
     )
 
     config = load_config()
-    knowledge = build_knowledge(config)
+    billing = BillingMonitor(
+        low_balance_usd=config.claude_low_balance_usd,
+        hosting_day=config.hosting_reminder_day,
+        hosting_note=config.hosting_monthly_cost,
+    )
+    knowledge = build_knowledge(config, billing)
     sheets = build_sheets(config)
     transcriber = Transcriber()  # модель речи грузится лениво, при первом голосовом
     users = UserRegistry()
@@ -135,6 +153,15 @@ async def main() -> None:
     # Запоминаем каждого, кто пишет боту (для рассылок).
     dp.update.outer_middleware(RegisterUserMiddleware(users))
     dp.include_router(setup_routers())
+
+    # Уведомления о деньгах уходят админу в личку.
+    if config.admin_id:
+        billing.notify = lambda text: bot.send_message(
+            config.admin_id, text, disable_web_page_preview=True
+        )
+        asyncio.create_task(money_watch_loop(billing))
+    else:
+        logging.warning("ADMIN_ID не задан — уведомления о деньгах отключены.")
 
     me = await bot.get_me()
     logging.info("Бот запущен: @%s. Напишите ему /start в Telegram.", me.username)
@@ -155,6 +182,7 @@ async def main() -> None:
         users=users,
         sheets=sheets,
         transcriber=transcriber,
+        billing=billing,
     )
 
 

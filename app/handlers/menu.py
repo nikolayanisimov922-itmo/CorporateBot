@@ -36,7 +36,13 @@ async def on_help(message: Message, config: Config, users: UserRegistry) -> None
     is_admin = config.is_admin(message.from_user.id)
     lang = users.get_lang(message.from_user.id)
 
-    lines = [t("help_title", lang), "", t("help_kb", lang), t("help_submit", lang)]
+    lines = [
+        t("help_title", lang),
+        "",
+        t("help_kb", lang),
+        t("help_submit", lang),
+        t("help_blackbox", lang),
+    ]
     if is_admin:
         lines.append(t("help_admin_broadcast", lang))
         lines.append(t("help_admin_refresh", lang))

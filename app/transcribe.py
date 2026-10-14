@@ -5,8 +5,10 @@
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
+import uuid
 
 
 class Transcriber:
@@ -30,3 +32,17 @@ class Transcriber:
         segments, info = model.transcribe(audio_path, beam_size=5)
         text = " ".join(seg.text.strip() for seg in segments).strip()
         return text, (info.language or "")
+
+
+async def voice_to_text(bot, voice, transcriber: Transcriber) -> tuple[str, str]:
+    """Скачивает голосовое из Telegram и распознаёт. Возвращает (текст, язык)."""
+    path = f"/tmp/voice_{uuid.uuid4().hex}.oga"
+    try:
+        file = await bot.get_file(voice.file_id)
+        await bot.download_file(file.file_path, destination=path)
+        return await asyncio.to_thread(transcriber.transcribe, path)
+    finally:
+        try:
+            os.remove(path)
+        except OSError:
+            pass

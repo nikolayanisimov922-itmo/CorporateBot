@@ -116,8 +116,8 @@ def load_config() -> Config:
             if value:
                 sheet_ids[env_name] = value
 
-    # Отдельная таблица для «Договорённости с клиентом».
-    for env_name in ("GOOGLE_SHEET_AGREEMENTS",):
+    # Отдельные таблицы для «Договорённости с клиентом» и «Черный ящик».
+    for env_name in ("GOOGLE_SHEET_AGREEMENTS", "GOOGLE_SHEET_BLACKBOX"):
         value = _get(env_name)
         if value:
             sheet_ids[env_name] = value

@@ -9,8 +9,6 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import logging
-import os
-import uuid
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -21,7 +19,7 @@ from app import keyboards as kb
 from app.i18n import t
 from app.knowledge_service import KnowledgeService
 from app.sheets import SheetsClient
-from app.transcribe import Transcriber
+from app.transcribe import Transcriber, voice_to_text
 from app.users import UserRegistry
 from config import Config
 
@@ -109,20 +107,14 @@ async def get_voice(
     await message.answer(t("agr_processing", lang))
     await message.bot.send_chat_action(message.chat.id, "typing")
 
-    path = f"/tmp/voice_{message.from_user.id}_{uuid.uuid4().hex}.oga"
     try:
-        file = await message.bot.get_file(message.voice.file_id)
-        await message.bot.download_file(file.file_path, destination=path)
-        transcript, detected = await asyncio.to_thread(transcriber.transcribe, path)
+        transcript, detected = await voice_to_text(
+            message.bot, message.voice, transcriber
+        )
     except Exception:  # noqa: BLE001
         logging.exception("Ошибка распознавания голосового")
         await message.answer(t("agr_error", lang), reply_markup=kb.main_menu(is_admin))
         return
-    finally:
-        try:
-            os.remove(path)
-        except OSError:
-            pass
 
     if not transcript:
         await message.answer(t("agr_error", lang), reply_markup=kb.main_menu(is_admin))

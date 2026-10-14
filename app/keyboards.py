@@ -10,6 +10,7 @@ from aiogram.types import (
 BTN_KNOWLEDGE = "📚 База знаний / Knowledge base"
 BTN_SEND_DATA = "📤 Передать данные / Submit data"
 BTN_AGREEMENTS = "🤝 Договорённости / Client notes"
+BTN_BLACKBOX = "⬛ Черный ящик / Black box"
 BTN_BROADCAST = "📢 Рассылка / Broadcast"
 BTN_REFRESH = "🔄 Обновить базу / Refresh"
 BTN_BALANCE = "💰 Баланс / Balance"
@@ -32,6 +33,7 @@ def main_menu(is_admin: bool = False) -> ReplyKeyboardMarkup:
         [KeyboardButton(text=BTN_KNOWLEDGE)],
         [KeyboardButton(text=BTN_SEND_DATA)],
         [KeyboardButton(text=BTN_AGREEMENTS)],
+        [KeyboardButton(text=BTN_BLACKBOX)],
     ]
     if is_admin:
         rows.append([KeyboardButton(text=BTN_BROADCAST)])
@@ -112,4 +114,31 @@ def broadcast_confirm() -> InlineKeyboardMarkup:
                 ),
             ]
         ]
+    )
+
+
+def departments_menu() -> ReplyKeyboardMarkup:
+    """«Чёрный ящик»: выбор отдела (по два в ряд)."""
+    from app.blackbox import DEPARTMENTS
+
+    buttons = [KeyboardButton(text=d) for d in DEPARTMENTS]
+    rows = [buttons[i : i + 2] for i in range(0, len(buttons), 2)]
+    rows.append([KeyboardButton(text=BTN_CANCEL)])
+    return ReplyKeyboardMarkup(
+        keyboard=rows,
+        resize_keyboard=True,
+        input_field_placeholder="Выберите отдел…",
+    )
+
+
+def severity_menu() -> ReplyKeyboardMarkup:
+    """«Чёрный ящик»: серьёзность проблемы."""
+    from app.blackbox import SEVERITIES
+
+    rows = [[KeyboardButton(text=s)] for s in SEVERITIES]
+    rows.append([KeyboardButton(text=BTN_CANCEL)])
+    return ReplyKeyboardMarkup(
+        keyboard=rows,
+        resize_keyboard=True,
+        input_field_placeholder="Насколько серьёзно?",
     )

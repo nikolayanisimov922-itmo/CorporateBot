@@ -37,6 +37,10 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "📤 <b>Передать данные</b> — отправить выработку или планы.",
         "en": "📤 <b>Submit data</b> — send your output or plans.",
     },
+    "help_blackbox": {
+        "ru": "⬛ <b>Черный ящик</b> — сразу зафиксировать проблему или сложный кейс.",
+        "en": "⬛ <b>Black box</b> — record a problem or a difficult case right away.",
+    },
     "help_lang": {
         "ru": "🌐 <b>English / Русский</b> — переключить язык бота.",
         "en": "🌐 <b>English / Русский</b> — switch the bot language.",
@@ -162,6 +166,72 @@ TEXTS: dict[str, dict[str, str]] = {
     "agr_not_configured": {
         "ru": "⚠️ Функция пока не настроена. Сообщите администратору.",
         "en": "⚠️ This feature is not set up yet. Please contact the administrator.",
+    },
+    # --- Черный ящик ---
+    "bb_ask_department": {
+        "ru": (
+            "⬛ <b>Черный ящик</b>\n\n"
+            "Здесь фиксируем проблемы и сложные кейсы — чтобы разобраться и не "
+            "повторять.\n\nВыберите ваш отдел:"
+        ),
+        "en": (
+            "⬛ <b>Black box</b>\n\n"
+            "Here we record problems and difficult cases — to sort them out and "
+            "not repeat them.\n\nChoose your department:"
+        ),
+    },
+    "bb_pick_department": {
+        "ru": "Пожалуйста, выберите отдел кнопкой ниже 👇",
+        "en": "Please choose a department with the buttons below 👇",
+    },
+    "bb_ask_story": {
+        "ru": (
+            "Расскажите своими словами — <b>голосовым</b> или <b>текстом</b>, как удобно:\n\n"
+            "• что произошло и когда;\n"
+            "• что вы уже сделали;\n"
+            "• какие выводы можно сделать, чтобы это не повторилось."
+        ),
+        "en": (
+            "Tell us in your own words — by <b>voice</b> or <b>text</b>, as you prefer:\n\n"
+            "• what happened and when;\n"
+            "• what you have already done;\n"
+            "• what conclusions can be drawn so it doesn't happen again."
+        ),
+    },
+    "bb_need_story": {
+        "ru": "Пришлите голосовое или текст (или нажмите «Отмена»).",
+        "en": "Please send a voice message or text (or press «Cancel»).",
+    },
+    "bb_ask_severity": {
+        "ru": (
+            "Насколько это серьёзно?\n\n"
+            "🔴 <b>Критично</b> — реальные последствия для денег, репутации перед "
+            "клиентом или срока сдачи проекта, либо повторяется не первый раз.\n"
+            "🟠 <b>Средне</b> — заметная проблема, потребовала лишнего времени и нервов, "
+            "но вы справились сами.\n"
+            "🟢 <b>Незначительно</b> — небольшая шероховатость, для истории; реакция "
+            "руководителя не нужна."
+        ),
+        "en": (
+            "How serious is it?\n\n"
+            "🔴 <b>Critical</b> — real consequences for money, reputation with the "
+            "client or the project deadline, or it is not the first time.\n"
+            "🟠 <b>Medium</b> — a noticeable problem that cost extra time and nerves, "
+            "but you handled it yourself.\n"
+            "🟢 <b>Minor</b> — a small hiccup, for the record; no manager reaction needed."
+        ),
+    },
+    "bb_pick_severity": {
+        "ru": "Пожалуйста, выберите вариант кнопкой ниже 👇",
+        "en": "Please choose an option with the buttons below 👇",
+    },
+    "bb_saved": {
+        "ru": "✅ Спасибо! Кейс записан в «Черный ящик».",
+        "en": "✅ Thank you! The case is recorded in the «Black box».",
+    },
+    "bb_voice_error": {
+        "ru": "❌ Не получилось распознать голосовое. Запишите ещё раз или напишите текстом.",
+        "en": "❌ Couldn't recognise the voice message. Please record again or type it.",
     },
 }
 

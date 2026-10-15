@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import html
 import logging
 
 from aiogram import F, Router
@@ -182,10 +183,17 @@ async def get_severity(
         await asyncio.to_thread(
             sheets.append_row, sheet_id, BLACKBOX_WORKSHEET, BLACKBOX_HEADER, row
         )
-    except Exception:  # noqa: BLE001
-        # Состояние не сбрасываем: человек может нажать серьёзность ещё раз.
+    except Exception as err:  # noqa: BLE001
+        # Таблица недоступна — кейс не теряем: целиком отправляем админу.
         logging.exception("Черный ящик: ошибка записи в таблицу")
-        await message.answer(t("submit_error", lang), reply_markup=kb.severity_menu())
+        await state.clear()
+        delivered = await _send_case_to_admin(
+            message, config, row, problem=sheets.explain_error(err)
+        )
+        await message.answer(
+            t("bb_saved_backup" if delivered else "submit_error", lang),
+            reply_markup=kb.main_menu(is_admin),
+        )
         return
 
     await state.clear()
@@ -201,6 +209,31 @@ async def get_severity(
             )
         except Exception:  # noqa: BLE001
             logging.warning("Не удалось отправить уведомление админу о черном ящике")
+
+
+async def _send_case_to_admin(
+    message: Message, config: Config, row: list[str], problem: str
+) -> bool:
+    """Запасной путь: кейс целиком админу в личку + причина, почему не записался."""
+    if not config.admin_id:
+        return False
+    when, who, department, severity, description = row
+    header = (
+        "⚠️ <b>Кейс «Черного ящика» не записался в таблицу</b>\n"
+        f"Причина: {html.escape(problem)}\n\n"
+        "Вот кейс целиком, чтобы он не потерялся 👇"
+    )
+    body = f"🕒 {when}\n👤 {who}\n🏢 {department}\n❗ {severity}\n\n{description}"
+    try:
+        await message.bot.send_message(config.admin_id, header)
+        for i in range(0, len(body), 4000):  # лимит Telegram — 4096 символов
+            await message.bot.send_message(
+                config.admin_id, body[i : i + 4000], parse_mode=None
+            )
+        return True
+    except Exception:  # noqa: BLE001
+        logging.exception("Черный ящик: не удалось отправить кейс админу")
+        return False
 
 
 @router.message(BlackBoxStates.severity)

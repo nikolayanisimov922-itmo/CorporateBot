@@ -229,6 +229,10 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "✅ Спасибо! Кейс записан в «Черный ящик».",
         "en": "✅ Thank you! The case is recorded in the «Black box».",
     },
+    "bb_saved_backup": {
+        "ru": "✅ Спасибо! Кейс получен и передан руководителю.",
+        "en": "✅ Thank you! The case has been received and passed to the manager.",
+    },
     "bb_voice_error": {
         "ru": "❌ Не получилось распознать голосовое. Запишите ещё раз или напишите текстом.",
         "en": "❌ Couldn't recognise the voice message. Please record again or type it.",

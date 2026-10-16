@@ -25,8 +25,10 @@ from app.blackbox import (
     DEPARTMENTS,
     SEVERITIES,
 )
+from app.claude_answer import describe_error
 from app.i18n import t
 from app.knowledge_service import KnowledgeService
+from app.notify import alert_admin
 from app.sheets import SheetsClient
 from app.transcribe import Transcriber, voice_to_text
 from app.users import UserRegistry
@@ -164,11 +166,13 @@ async def get_severity(
     # Оформление через Claude. Если Claude недоступен — сохраняем рассказ как есть,
     # чтобы кейс не потерялся.
     description = story
+    claude_problem = ""
     if knowledge.answerer is not None:
         try:
             description = await knowledge.answerer.structure_problem(story) or story
-        except Exception:  # noqa: BLE001
+        except Exception as err:  # noqa: BLE001
             logging.exception("Черный ящик: Claude не смог оформить текст")
+            claude_problem = describe_error(err)
 
     user = message.from_user
     who = user.full_name + (f" (@{user.username})" if user.username else "")
@@ -199,6 +203,14 @@ async def get_severity(
     await state.clear()
     await message.answer(t("bb_saved", lang), reply_markup=kb.main_menu(is_admin))
 
+    if claude_problem:
+        await alert_admin(
+            message.bot,
+            config,
+            "⚠️ Claude не смог оформить кейс «Черного ящика» — в таблицу записан "
+            f"рассказ как есть.\nПричина: {html.escape(claude_problem)}",
+        )
+
     if config.admin_id and user.id != config.admin_id:
         icon = {"Критично": "🔴", "Средне": "🟠"}.get(severity, "🟢")
         try:
@@ -215,25 +227,15 @@ async def _send_case_to_admin(
     message: Message, config: Config, row: list[str], problem: str
 ) -> bool:
     """Запасной путь: кейс целиком админу в личку + причина, почему не записался."""
-    if not config.admin_id:
-        return False
     when, who, department, severity, description = row
-    header = (
+    return await alert_admin(
+        message.bot,
+        config,
         "⚠️ <b>Кейс «Черного ящика» не записался в таблицу</b>\n"
         f"Причина: {html.escape(problem)}\n\n"
-        "Вот кейс целиком, чтобы он не потерялся 👇"
+        "Вот кейс целиком, чтобы он не потерялся 👇",
+        f"🕒 {when}\n👤 {who}\n🏢 {department}\n❗ {severity}\n\n{description}",
     )
-    body = f"🕒 {when}\n👤 {who}\n🏢 {department}\n❗ {severity}\n\n{description}"
-    try:
-        await message.bot.send_message(config.admin_id, header)
-        for i in range(0, len(body), 4000):  # лимит Telegram — 4096 символов
-            await message.bot.send_message(
-                config.admin_id, body[i : i + 4000], parse_mode=None
-            )
-        return True
-    except Exception:  # noqa: BLE001
-        logging.exception("Черный ящик: не удалось отправить кейс админу")
-        return False
 
 
 @router.message(BlackBoxStates.severity)

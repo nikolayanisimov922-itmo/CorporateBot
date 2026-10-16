@@ -159,6 +159,10 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "✅ Готово, всё зафиксировано!",
         "en": "✅ Done, everything is recorded!",
     },
+    "agr_saved_backup": {
+        "ru": "✅ Готово! Договорённость получена и передана руководителю.",
+        "en": "✅ Done! The notes have been received and passed to the manager.",
+    },
     "agr_error": {
         "ru": "❌ Не получилось сохранить. Попробуйте записать голосовое ещё раз.",
         "en": "❌ Couldn't save. Please try recording the voice message again.",

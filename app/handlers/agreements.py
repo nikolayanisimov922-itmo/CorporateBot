@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import html
 import logging
 
 from aiogram import F, Router
@@ -16,8 +17,10 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
 
 from app import keyboards as kb
+from app.claude_answer import describe_error
 from app.i18n import t
 from app.knowledge_service import KnowledgeService
+from app.notify import alert_admin
 from app.sheets import SheetsClient
 from app.transcribe import Transcriber, voice_to_text
 from app.users import UserRegistry
@@ -111,8 +114,14 @@ async def get_voice(
         transcript, detected = await voice_to_text(
             message.bot, message.voice, transcriber
         )
-    except Exception:  # noqa: BLE001
+    except Exception as err:  # noqa: BLE001
         logging.exception("Ошибка распознавания голосового")
+        await alert_admin(
+            message.bot,
+            config,
+            "⚠️ <b>Договорённости: не удалось распознать голосовое</b>\n"
+            f"Причина: {html.escape(f'{type(err).__name__}: {err}'[:500])}",
+        )
         await message.answer(t("agr_error", lang), reply_markup=kb.main_menu(is_admin))
         return
 
@@ -120,23 +129,53 @@ async def get_voice(
         await message.answer(t("agr_error", lang), reply_markup=kb.main_menu(is_admin))
         return
 
+    # Оформление через Claude. Если Claude недоступен — записываем расшифровку
+    # как есть, чтобы договорённость не потерялась.
+    structured = transcript
+    claude_problem = ""
     try:
-        structured = await knowledge.answerer.structure_notes(
-            transcript, detected or lang
+        structured = (
+            await knowledge.answerer.structure_notes(transcript, detected or lang)
+            or transcript
         )
-        now = dt.datetime.now().strftime("%d.%m.%Y %H:%M")
-        name = message.from_user.full_name
-        header = ["Дата", "Сотрудник", "Проект", "Расшифровка"]
-        row = [now, name, project, structured or transcript]
+    except Exception as err:  # noqa: BLE001
+        logging.exception("Договорённости: Claude не смог оформить текст")
+        claude_problem = describe_error(err)
+
+    now = dt.datetime.now().strftime("%d.%m.%Y %H:%M")
+    name = message.from_user.full_name
+    header = ["Дата", "Сотрудник", "Проект", "Расшифровка"]
+    row = [now, name, project, structured]
+    try:
         await asyncio.to_thread(
             sheets.append_row, sheet_id, AGREEMENTS_WORKSHEET, header, row
         )
-    except Exception:  # noqa: BLE001
+    except Exception as err:  # noqa: BLE001
+        # Таблица недоступна — договорённость не теряем: целиком отправляем админу.
         logging.exception("Ошибка сохранения договорённостей")
-        await message.answer(t("agr_error", lang), reply_markup=kb.main_menu(is_admin))
+        delivered = await alert_admin(
+            message.bot,
+            config,
+            "⚠️ <b>Договорённость не записалась в таблицу</b>\n"
+            f"Причина: {html.escape(sheets.explain_error(err))}\n\n"
+            "Вот она целиком, чтобы не потерялась 👇",
+            f"🕒 {now}\n👤 {name}\n📁 Проект: {project}\n\n{structured}",
+        )
+        await message.answer(
+            t("agr_saved_backup" if delivered else "agr_error", lang),
+            reply_markup=kb.main_menu(is_admin),
+        )
         return
 
     await message.answer(t("agr_saved", lang), reply_markup=kb.main_menu(is_admin))
+
+    if claude_problem:
+        await alert_admin(
+            message.bot,
+            config,
+            "⚠️ Claude не смог оформить договорённость — в таблицу записана "
+            f"расшифровка как есть.\nПричина: {html.escape(claude_problem)}",
+        )
 
     # Короткое уведомление администратору (только ему, от этого же бота).
     if config.admin_id and message.from_user.id != config.admin_id:

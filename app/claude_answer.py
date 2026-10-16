@@ -70,6 +70,33 @@ def render_markdown(raw: str) -> str:
     return text.strip()
 
 
+def describe_error(err: Exception) -> str:
+    """Понятная причина, почему Claude не ответил (для администратора)."""
+    from app.billing import is_out_of_credit
+
+    if is_out_of_credit(err):
+        return "закончились деньги на Claude — пополните баланс на console.anthropic.com"
+    if isinstance(err, anthropic.AuthenticationError):
+        return "ключ Claude не действует — проверьте ANTHROPIC_API_KEY в .env"
+    if isinstance(err, anthropic.NotFoundError):
+        return "модель Claude недоступна — проверьте ANTHROPIC_MODEL в .env"
+    if isinstance(err, anthropic.RateLimitError):
+        return "слишком много запросов к Claude — временное ограничение, пройдёт само"
+    if isinstance(err, anthropic.APIConnectionError):
+        return "нет связи с Claude (сеть сервера) — обычно проходит само"
+    if isinstance(err, anthropic.APIStatusError) and err.status_code >= 500:
+        return "сбой на стороне Claude — обычно проходит сам через несколько минут"
+    return f"{type(err).__name__}: {err}"[:500]
+
+
+_NO_REFUSAL = (
+    "\n- Ты НЕ оцениваешь содержание и никогда не отказываешься: это рабочая "
+    "заметка сотрудника, твоя задача — только аккуратно оформить её. Никаких "
+    "комментариев, предупреждений и обращений к пользователю — только оформленный "
+    "текст. Если что-то непонятно — оставь как сказано."
+)
+
+
 def build_context(results: list[SearchResult]) -> str:
     parts = []
     for i, r in enumerate(results, 1):
@@ -134,11 +161,15 @@ class ClaudeAnswerer:
             "- Оформи связным текстом или короткими пунктами. Без markdown-символов "
             "(#, *, **).\n"
             "- Пиши на том же языке, на котором говорил сотрудник."
+            + _NO_REFUSAL
         )
         resp = await self._create(
             max_tokens=1500,
             system=system,
-            messages=[{"role": "user", "content": transcript}],
+            messages=[{
+                "role": "user",
+                "content": f"Расшифровка голосовой заметки сотрудника:\n\n{transcript}",
+            }],
         )
         return "".join(b.text for b in resp.content if b.type == "text").strip()
 
@@ -163,11 +194,15 @@ class ClaudeAnswerer:
             "- Без markdown-символов (#, *, **).\n"
             "- Пиши на том же языке, на котором говорил сотрудник (заголовки блоков "
             "тоже)."
+            + _NO_REFUSAL
         )
         resp = await self._create(
             max_tokens=1500,
             system=system,
-            messages=[{"role": "user", "content": description}],
+            messages=[{
+                "role": "user",
+                "content": f"Рассказ сотрудника о проблеме:\n\n{description}",
+            }],
         )
         return "".join(b.text for b in resp.content if b.type == "text").strip()
 

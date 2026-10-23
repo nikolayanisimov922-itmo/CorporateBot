@@ -75,6 +75,9 @@ class Config:
     sheet_ids: dict = field(default_factory=dict)
     google_credentials_file: str = "google_credentials.json"
 
+    # Таблица «План/факт расходов» (комплектаторы и ПМ).
+    expenses_sheet_id: str = ""
+
     # --- Контроль денег: Claude и хостинг ---
     # Предупредить, когда на Claude останется меньше этой суммы ($).
     claude_low_balance_usd: float = 2.0
@@ -89,6 +92,8 @@ class Config:
 
 
 def load_config() -> Config:
+    from app.expenses import DEFAULT_SHEET_ID as EXPENSES_DEFAULT_SHEET
+
     token = _get("BOT_TOKEN")
     if not token:
         raise RuntimeError(
@@ -105,16 +110,7 @@ def load_config() -> Config:
             "ADMIN_ID должен быть числом (узнать свой ID: напишите @userinfobot)."
         )
 
-    # Собираем ID таблиц по формам: каждая форма знает имя своей переменной .env.
-    from app.forms import FORMS
-
     sheet_ids: dict[str, str] = {}
-    for form in FORMS.values():
-        env_name = form.get("sheet_env")
-        if env_name:
-            value = _get(env_name)
-            if value:
-                sheet_ids[env_name] = value
 
     # Отдельные таблицы для «Договорённости с клиентом» и «Черный ящик».
     for env_name in ("GOOGLE_SHEET_AGREEMENTS", "GOOGLE_SHEET_BLACKBOX"):
@@ -148,6 +144,7 @@ def load_config() -> Config:
         google_credentials_file=_get(
             "GOOGLE_CREDENTIALS_FILE", "google_credentials.json"
         ),
+        expenses_sheet_id=_get("GOOGLE_SHEET_EXPENSES") or EXPENSES_DEFAULT_SHEET,
         claude_low_balance_usd=_float(_get("CLAUDE_LOW_BALANCE_USD", "2"), 2.0),
         # 1–28, чтобы день существовал в любом месяце; 0 — выключено.
         hosting_reminder_day=max(0, min(28, _int(_get("HOSTING_REMINDER_DAY", "1"), 1))),

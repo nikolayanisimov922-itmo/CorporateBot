@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import html
+import json
 import re
 
 import anthropic
@@ -205,6 +206,44 @@ class ClaudeAnswerer:
             }],
         )
         return "".join(b.text for b in resp.content if b.type == "text").strip()
+
+    async def extract_expenses(self, text: str) -> list[dict]:
+        """План/факт: достаёт из сообщения проекты и суммы как есть, без правок.
+
+        Возвращает [{"project": str, "amounts": [str, ...]}]. Проверку формата
+        и разбор чисел делает код (app/expenses.py), а не модель.
+        """
+        system = (
+            "Из сообщения сотрудника извлеки список проектов и сумм расходов.\n"
+            "Верни ТОЛЬКО JSON без пояснений: "
+            '{"items": [{"project": "...", "amounts": ["..."]}]}\n'
+            "Правила:\n"
+            "- project — номер и название проекта ТОЧНО как написал сотрудник. "
+            "Ничего не исправляй, не дописывай и не придумывай номера. Если номера "
+            "нет — оставь как есть.\n"
+            "- amounts — все суммы, относящиеся к этому проекту, строками ровно как "
+            "написаны (например \"97781,68\" или \"53,264.42 AED\").\n"
+            "- Заголовки и комментарии, которые не являются проектами, пропусти.\n"
+            "- Ты не оцениваешь содержание и никогда не отказываешься."
+        )
+        resp = await self._create(
+            max_tokens=2000,
+            system=system,
+            messages=[{"role": "user", "content": f"Сообщение сотрудника:\n\n{text}"}],
+        )
+        raw = "".join(b.text for b in resp.content if b.type == "text")
+        start, end = raw.find("{"), raw.rfind("}")
+        if start < 0 or end <= start:
+            raise ValueError(f"Claude вернул не JSON: {raw[:200]}")
+        items = json.loads(raw[start : end + 1]).get("items") or []
+        return [
+            {
+                "project": str(it.get("project") or ""),
+                "amounts": [str(a) for a in (it.get("amounts") or [])],
+            }
+            for it in items
+            if isinstance(it, dict)
+        ]
 
     async def translate(self, text: str, target: str = "English") -> str:
         """Переводит текст (для двуязычных рассылок). Возвращает только перевод."""

@@ -57,6 +57,14 @@ class UserRegistry:
         entry["lang"] = lang
         self._save()
 
+    def find_by_username(self, username: str) -> int | None:
+        """ID пользователя по нику в Telegram (без учёта регистра и @)."""
+        u = username.lstrip("@").lower()
+        for key, entry in self._users.items():
+            if (entry.get("username") or "").lower() == u:
+                return int(key)
+        return None
+
     def all_ids(self) -> list[int]:
         return [int(k) for k in self._users]
 

@@ -17,7 +17,9 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 from app.billing import BillingMonitor
 from app.claude_answer import ClaudeAnswerer
+from app.expenses import ExpenseStore
 from app.handlers import setup_routers
+from app.handlers.expenses import reminders_loop
 from app.knowledge_service import KnowledgeService
 from app.middlewares import RegisterUserMiddleware
 from app.rag import Embedder, SearchIndex
@@ -47,7 +49,7 @@ def _ensure_google_credentials_file(config) -> None:
 
 def build_sheets(config) -> SheetsClient | None:
     """Подключает Google Sheets (этап 7). None, если не настроено."""
-    if not config.sheet_ids:
+    if not config.sheet_ids and not config.expenses_sheet_id:
         logging.warning(
             "Не задан ни один GOOGLE_SHEET_* — раздел «Передать данные» недоступен."
         )
@@ -143,6 +145,7 @@ async def main() -> None:
     sheets = build_sheets(config)
     transcriber = Transcriber()  # модель речи грузится лениво, при первом голосовом
     users = UserRegistry()
+    expense_store = ExpenseStore()
     logging.info("Реестр пользователей: %d чел.", users.count())
 
     bot = Bot(
@@ -162,6 +165,9 @@ async def main() -> None:
         asyncio.create_task(money_watch_loop(billing))
     else:
         logging.warning("ADMIN_ID не задан — уведомления о деньгах отключены.")
+
+    # План/факт расходов: напоминания комплектаторам и ПМ по расписанию.
+    asyncio.create_task(reminders_loop(bot, config, users, expense_store, sheets))
 
     me = await bot.get_me()
     logging.info("Бот запущен: @%s. Напишите ему /start в Telegram.", me.username)
@@ -183,6 +189,7 @@ async def main() -> None:
         sheets=sheets,
         transcriber=transcriber,
         billing=billing,
+        expense_store=expense_store,
     )
 
 

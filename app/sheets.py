@@ -22,6 +22,10 @@ class SheetsClient:
         self._gc = gspread.authorize(creds)
         self._cache: dict[str, gspread.Spreadsheet] = {}
 
+    def spreadsheet(self, spreadsheet_id: str):
+        """Открытая таблица gspread (кэшируется). Блокирующий вызов."""
+        return self._spreadsheet(spreadsheet_id)
+
     def _spreadsheet(self, spreadsheet_id: str):
         if spreadsheet_id not in self._cache:
             self._cache[spreadsheet_id] = self._gc.open_by_key(spreadsheet_id)

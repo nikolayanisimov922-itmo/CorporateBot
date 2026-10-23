@@ -34,8 +34,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "📚 <b>Knowledge base</b> — ask a question about the company base.",
     },
     "help_submit": {
-        "ru": "📤 <b>Передать данные</b> — отправить выработку или планы.",
-        "en": "📤 <b>Submit data</b> — send your output or plans.",
+        "ru": "📤 <b>Передать данные</b> — план и факт расходов (комплектаторы и ПМ).",
+        "en": "📤 <b>Submit data</b> — planned and actual expenses (procurement and PMs).",
     },
     "help_blackbox": {
         "ru": "⬛ <b>Черный ящик</b> — сразу зафиксировать проблему или сложный кейс.",

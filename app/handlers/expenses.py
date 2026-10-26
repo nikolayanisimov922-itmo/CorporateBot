@@ -2,7 +2,7 @@
 
 Поток: напоминание с кнопкой (или «📤 Передать данные» в меню) → сотрудник
 присылает список «381-03 Название — сумма» → бот проверяет формат (номер
-вида 381-03 и название обязательны) → показывает, как понял, → «✅ Верно» →
+номер, название и сумма — формат не важен) → показывает, как понял, → «✅ Верно» →
 запись в Google-таблицу. Повторные напоминания получают только не приславшие.
 
 Администратор (не из команды) может пройти весь путь в тестовом режиме —
@@ -80,23 +80,23 @@ TXT = {
         "ru": (
             "{icon} <b>{kind} · {period}</b>\n\n"
             "Пришлите одним сообщением список проектов — каждый с новой строки: "
-            "код проекта (например, 381-03), название и сумма.\n\nПример:\n{example}"
+            "номер и название проекта и сумма (сумма может быть 0).\n\nПример:\n{example}"
         ),
         "en": (
             "{icon} <b>{kind_en} · {period}</b>\n\n"
             "Send the list of projects in one message — one per line: "
-            "project code (e.g. 381-03), name and amount.\n\nExample:\n{example}"
+            "project number, name and amount (0 is fine).\n\nExample:\n{example}"
         ),
     },
     "bad_format": {
         "ru": (
             "❌ Не могу принять — проверьте эти строки:\n{lines}\n\n"
-            "Каждый проект: код (например, 381-03) и название, затем сумма. Пример:\n{example}\n\n"
+            "В каждой строке нужны номер проекта, название и сумма. Пример:\n{example}\n\n"
             "Пришлите список заново целиком."
         ),
         "en": (
             "❌ Can't accept it — please check these lines:\n{lines}\n\n"
-            "Each project: code (e.g. 381-03) and name, then the amount. Example:\n{example}\n\n"
+            "Each line needs the project number, name and amount. Example:\n{example}\n\n"
             "Please send the whole list again."
         ),
     },

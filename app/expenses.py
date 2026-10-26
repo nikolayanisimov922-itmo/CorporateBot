@@ -234,22 +234,22 @@ def parse_amount(raw: str) -> float | None:
         return None
 
 
-_CODE = re.compile(r"^\s*(\d{2,4})-(\d{1,3})\b(.*)$")
-
-
 def project_error(project: str) -> str | None:
-    """Проверка формата «381-03 Название»: код «номер-код» и название. None — всё хорошо."""
-    m = _CODE.match(project or "")
-    if not m:
-        return "нет кода проекта (нужно, например, 381-03 и название)"
-    name = m.group(3).strip(" ,.:;—–-")
-    if not re.search(r"[A-Za-zА-Яа-яЁё]", name):
-        return "после кода нужно название проекта"
+    """Мягкая проверка: в проекте есть номер (любые цифры) и название (буквы).
+
+    Формат не важен: «381-03 Villa 29», «345-03_Unit 504», «317 Serenia» — всё
+    подходит. None — всё хорошо, иначе причина.
+    """
+    text = project or ""
+    if not re.search(r"\d", text):
+        return "нет номера проекта"
+    if not re.search(r"[A-Za-zА-Яа-яЁё]", text):
+        return "нет названия проекта"
     return None
 
 
 _LINE = re.compile(
-    r"^(?P<project>.+?)\s*(?:[—–:=]|\s-\s)\s*(?P<amount>\d[\d\s.,  ']*)"
+    r"^(?P<project>.+?)(?:\s*[—–:=]\s*|\s+-\s*|\s*-\s+)(?P<amount>\d[\d\s.,  ']*)"
     r"\s*(?:AED|aed|дирхам\w*)?\s*$"
 )
 

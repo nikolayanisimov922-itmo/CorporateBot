@@ -1,9 +1,10 @@
 """«📊 Планы»: разбор листов «ПЛАН <МЕСЯЦ>» и выполнение плана (чистые функции).
 
-Структура листа: строка 1 — «Роль | Показатель | План на месяц | Неделя 01.10 - 02.10 |…»
-(неделя — блок из 4 колонок: «Факт» ×2 и «% плана месяца (накоп.)» ×2), строка 2 —
-подписи «Факт» / «%», данные с 3-й строки; «Роль» заполнена только в первой строке
-блока → протягиваем вниз.
+Структура листа: строка 1 — «Роль | Показатель | План на месяц | Неделя 01.10 - 02.10 |…»;
+неделя — блок из 4 колонок «План недели | Факт | % плана недели | % плана месяца
+(накоп.)» (подписи — во 2-й строке и над каждым отделом). Суммируем ФАКТЫ недель
+(колонки E, I, M, Q, U), а не недельный план. «Роль» заполнена только в первой
+строке блока → протягиваем вниз.
 
 % выполнения считаем сами (сумма фактов / план) — колонка «% накоп.» в таблице
 ломается на пустых неделях. Обратные показатели (бюджеты, стоимость лида): меньше —
@@ -117,6 +118,16 @@ def year_for(month: int, today: dt.date) -> int:
     return today.year
 
 
+def _label_col(rows: list[list], c0: int, c1: int, match) -> int | None:
+    """Первая колонка в диапазоне [c0, c1), где в какой-нибудь строке стоит подпись."""
+    for r in rows[:80]:
+        for j in range(c0, min(c1, len(r))):
+            x = norm(r[j])
+            if x and match(x):
+                return j
+    return None
+
+
 def parse_plan_sheet(title: str, rows: list[list], today: dt.date) -> PlanSheet | None:
     month = month_of_title(title)
     if month is None:
@@ -151,14 +162,18 @@ def parse_plan_sheet(title: str, rows: list[list], today: dt.date) -> PlanSheet 
     sub = rows[h + 1] if len(rows) > h + 1 else []
     has_sub = any("факт" in norm(c) for c in sub)
     start = h + 2 if has_sub else h + 1
-    # Внутри блока недели: «Факт» и «% плана (накоп.)» — по подписям второй строки.
+    # Блок недели — 4 колонки: «План | Факт | % плана недели | % плана месяца (накоп.)».
+    # Подписи стоят не только во 2-й строке, но и над каждым отделом (строка 17 и т.п.),
+    # поэтому ищем их во всех строках внутри блока. Факт — колонка «Факт», не «План»!
     ends = [w.col for w in weeks[1:]] + [max((len(r) for r in rows), default=0)]
     for w, end in zip(weeks, ends):
-        labels = {j: norm(sub[j]) if j < len(sub) else "" for j in range(w.col, end)}
-        fact = next((j for j, x in labels.items() if x.startswith("факт")), None)
+        fact = _label_col(rows, w.col, end, lambda x: x.startswith("факт"))
+        if fact is None:
+            plan_w = _label_col(rows, w.col, end, lambda x: x == "план" or x.startswith("план "))
+            fact = plan_w + 1 if plan_w is not None and plan_w + 1 < end else None
         if fact is not None:
             w.col = fact
-        w.pct_col = next((j for j, x in labels.items() if "%" in x), None)
+        w.pct_col = _label_col(rows, w.col, end, lambda x: "накоп" in x)
 
     indicators: list[Indicator] = []
     role = ""
@@ -199,12 +214,7 @@ def _pct_check(ps: "PlanSheet") -> list[str]:
         ours = sum(x for _, x in filled)
         theirs = pct * ind.plan
         where = f"«{ps.title}», {ind.role} «{ind.name}» (строка {ind.row})"
-        if is_cumulative(ind, cw):
-            out.append(
-                f"{where}: факты внесены нарастающим итогом (последний {filled[-1][1]:g} совпадает "
-                f"с «% накоп.»), бот берёт последнее значение, а не сумму недель."
-            )
-        elif abs(ours - theirs) > _tolerance(ind.plan):
+        if abs(ours - theirs) > _tolerance(ind.plan):
             out.append(
                 f"{where}: сумма фактов по неделям {ours:g}, а «% накоп.» даёт ≈{theirs:g} "
                 f"({pct * 100:.0f}%). Проверьте, как вносятся факты."
@@ -242,43 +252,18 @@ class Result:
     fact: float | None
     pct: float | None
     status: str  # 🟢 🟡 🔴 ✅ ⚠️ ⚪
-    cumulative: bool = False  # факты внесены нарастающим итогом — взяли последний
 
 
 def _tolerance(plan: float) -> float:
     return max(0.5, abs(plan) * 0.02)
 
 
-def is_cumulative(ind: Indicator, upto_week: int | None) -> bool:
-    """Факты внесены нарастающим итогом?
-
-    Да, если колонка «% накоп.» последней заполненной недели совпадает с
-    последним фактом, а не с суммой фактов по неделям.
-    """
-    if ind.kind != "sum" or not ind.plan or upto_week is None:
-        return False
-    filled = [(i, x) for i, x in enumerate(ind.facts[: upto_week + 1]) if x is not None]
-    if len(filled) < 2:
-        return False
-    last_i, last = filled[-1]
-    pct = ind.pcts[last_i] if last_i < len(ind.pcts) else None
-    if pct is None:
-        return False
-    implied = pct * ind.plan
-    total = sum(x for _, x in filled)
-    tol = _tolerance(ind.plan)
-    return abs(last - implied) <= tol < abs(total - implied)
-
-
 def evaluate(ind: Indicator, upto_week: int | None, pace: float) -> Result:
     weeks = ind.facts[: (upto_week + 1) if upto_week is not None else 0]
     filled = [x for x in weeks if x is not None]
-    cumulative = False
     if ind.kind == "computed":
         # Стоимость лида: не суммируется — среднее по заполненным неделям.
         fact = sum(filled) / len(filled) if filled else None
-    elif is_cumulative(ind, upto_week):
-        fact, cumulative = filled[-1], True
     else:
         fact = sum(filled) if filled else None
     if ind.plan in (None, 0):
@@ -290,7 +275,7 @@ def evaluate(ind: Indicator, upto_week: int | None, pace: float) -> Result:
     pct = (fact or 0) / ind.plan
     lag = pace - pct
     status = "🟢" if lag <= 0 else ("🟡" if lag <= 0.15 else "🔴")
-    return Result(ind, fact, pct, status, cumulative)
+    return Result(ind, fact, pct, status)
 
 
 def plan_query(ps: PlanSheet, role: str | None, today: dt.date) -> dict:

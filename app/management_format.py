@@ -22,6 +22,7 @@ from app.mgmt_projects import (
     signed_in_month,
     strip_number,
     summary,
+    workload,
 )
 
 e = html.escape
@@ -47,7 +48,7 @@ L = {
     "signed": {"ru": "Новые подписания", "en": "New signings"},
     "none": {"ru": "нет", "en": "none"},
     "load": {"ru": "Загрузка", "en": "Workload"},
-    "load_none": {"ru": "Лист «Загрузка» пустой или не найден.", "en": "The workload sheet is empty or missing."},
+    "load_none": {"ru": "На листе отдела нет проектов в работе с ответственным.", "en": "No active projects with an owner on the department sheet."},
     "rem_pay": {"ru": "остаток оплат", "en": "payments due"},
     "pause_n": {"ru": "на паузе", "en": "paused"},
     "plan": {"ru": "План", "en": "Plan"},
@@ -145,21 +146,22 @@ def projects_dept(pd: ProjectsData, d: str, lang: str) -> str:
 
 
 def workload_text(pd: ProjectsData, d: str, lang: str) -> str:
-    rows = pd.workload.get(d) or []
-    head = f"👤 <b>{tr('load', lang)} — {dept_name(d, lang)}</b>"
+    rows = workload(pd, d)
+    head = f"👤 <b>{tr('load', lang)} — {dept_name(d, lang)}</b>\n<i>{tr('src_dept', lang, s=DEPT_SHEET[d])}</i>"
     if not rows:
         return head + "\n\n" + tr("load_none", lang)
     lines = [head, ""]
     for r in rows:
-        parts = [plural(r.get("projects"), lang)]
-        if r.get("area") is not None:
+        parts = [plural(r["projects"], lang)]
+        if r["area"] is not None:
             parts.append(f"{fmt_num(r['area'])} м²")
-        if r.get("paused") is not None:
-            parts.append(f"{tr('pause_n', lang)} {fmt_num(r['paused'])}")
-        if r.get("remaining") is not None:
+        if r["paused"]:
+            parts.append(f"{tr('pause_n', lang)} {r['paused']}")
+        if r["remaining"] is not None:
             parts.append(f"{tr('rem_pay', lang)} {fmt_num(r['remaining'], True)}")
-        name = f"<b>{e(r['name'])}</b>" if r["total"] else e(r["name"])
+        name = f"<b>{tr('total', lang)}</b>" if r["total"] else e(r["name"])
         lines.append(f"{name} — " + " · ".join(parts))
+    lines += ["", "<i>" + ("проекты и м² — в работе (In Progress)" if lang != "en" else "projects and m² — in progress") + "</i>"]
     return "\n".join(lines)
 
 

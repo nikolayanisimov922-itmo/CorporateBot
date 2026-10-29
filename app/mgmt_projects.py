@@ -8,8 +8,8 @@
     ответственные там — «официальные». Проект может стоять на листах двух
     отделов (комплектация + визуализации, напр. 387-03: Alina и Ilya) — тогда он
     идёт в зачёт обоим отделам и обоим исполнителям.
-Готовые листы «Загрузка …» показываем как есть, расхождения с листами отделов —
-в /mgmt_check. Заголовки ищем по тексту, а не по номерам строк/колонок.
+Листы «Загрузка …» не используем — их формулы расходятся с листами отделов.
+Заголовки ищем по тексту, а не по номерам строк/колонок.
 """
 from __future__ import annotations
 
@@ -59,11 +59,6 @@ _SUFFIX_RE = re.compile(r"\d-(\d{2})\b")
 _NOT_PEOPLE = {"without a project", "без проекта", ""}
 
 DEPT_SHEET = {DEV: "Отдел разработки", REAL: "Отдел реализации", KOMP: "Отдел комплектации"}
-LOAD_SHEET = {
-    DEV: "Загрузка (отдел разработки)",
-    REAL: "Загрузка отдела реализации",
-    KOMP: "Загрузка отдела комплектации",
-}
 
 
 def norm_status(v) -> str:
@@ -132,7 +127,6 @@ class DeptRow:
 class ProjectsData:
     projects: list[Project]
     dept_rows: dict  # отдел → [DeptRow]
-    workload: dict  # отдел → [{"name", "projects", "area", ...}] с листов «Загрузка …»
     issues: list[str]
 
 
@@ -278,58 +272,11 @@ def parse_dept_sheet(rows: list[list], dept: str, issues: list[str]) -> list[Dep
     return out
 
 
-def parse_workload(rows: list[list], dept: str) -> list[dict]:
-    """Готовая загрузка с листа «Загрузка …»: строки сотрудников + «Итого»."""
-    hit = find_header(rows, ["projects now"])
-    if not hit:
-        return []
-    h, heads = hit
-    c_name = 0
-    for i, x in enumerate(heads):
-        if x in ("designer", "project manager", "designer / project manager"):
-            c_name = i
-            break
-    c_now = col(heads, "projects now")
-    c_area = col(heads, "current area")
-    extra = {
-        "remaining": col(heads, "remaining payment now"),
-        "paused": col(heads, "projects on pause"),
-        "equipment": col(heads, "equipment"),
-        "commission": col(heads, "commission"),
-        "supervision": col(heads, "author's supervision", "authors supervision"),
-    }
-    out = []
-    for row in rows[h + 1:]:
-        name = _txt(cell(row, c_name))
-        if not name:
-            if out:
-                break  # ниже — другие таблицы (помесячная динамика и т.п.)
-            continue
-        if norm(name) in _NOT_PEOPLE:
-            continue
-        item = {
-            "name": name,
-            "total": norm(name) in ("total", "итого", "всего"),
-            "projects": to_num(cell(row, c_now)),
-            "area": to_num(cell(row, c_area)),
-        }
-        for k, j in extra.items():
-            if j is not None:
-                item[k] = to_num(cell(row, j))
-        out.append(item)
-        if item["total"]:
-            break
-    return out
-
-
 def parse_projects(data: dict) -> ProjectsData:
     issues: list[str] = []
     projects = parse_general(get_sheet(data, "Общая таблица"), issues)
     dept_rows = {d: parse_dept_sheet(get_sheet(data, DEPT_SHEET[d]), d, issues) for d in DEPTS}
-    workload = {d: parse_workload(get_sheet(data, LOAD_SHEET[d]), d) for d in DEPTS}
-    pd = ProjectsData(projects, dept_rows, workload, issues)
-    issues += _cross_checks(pd)
-    return pd
+    return ProjectsData(projects, dept_rows, issues)
 
 
 # --- расчёты --------------------------------------------------------------------
@@ -377,14 +324,8 @@ def signed_in_month(pd: ProjectsData, year: int, month: int) -> list[Project]:
 
 
 def people(pd: ProjectsData, d: str) -> list[str]:
-    """Сотрудники отдела: сначала как на листе «Загрузка», потом остальные с листа отдела."""
-    names = [r["name"] for r in pd.workload.get(d, []) if not r["total"]]
-    known = {norm(n) for n in names}
-    for r in pd.dept_rows.get(d, []):
-        if r.person and r.status in (ACTIVE, PAUSED) and norm(r.person) not in known:
-            names.append(r.person)
-            known.add(norm(r.person))
-    return names
+    """Сотрудники отдела с проектами в работе или на паузе — по листу отдела."""
+    return [w["name"] for w in workload(pd, d) if not w["total"]]
 
 
 def person_projects(pd: ProjectsData, d: str, name: str) -> list[DeptRow]:
@@ -394,33 +335,35 @@ def person_projects(pd: ProjectsData, d: str, name: str) -> list[DeptRow]:
     return sorted(rows, key=lambda r: (r.status != ACTIVE, r.number))
 
 
-def own_workload(pd: ProjectsData, d: str) -> dict[str, dict]:
-    """Загрузка по листу отдела: проекты «In progress» и м² на человека."""
-    out: dict[str, dict] = {}
+def workload(pd: ProjectsData, d: str) -> list[dict]:
+    """Загрузка по листу отдела: на человека — проекты в работе / на паузе,
+    м² и остаток оплат по проектам в работе. Последняя строка — «Итого»."""
+    by: dict[str, dict] = {}
     for r in pd.dept_rows.get(d, []):
-        if r.status != ACTIVE or not r.person:
+        if r.status not in (ACTIVE, PAUSED) or not r.person:
             continue
-        w = out.setdefault(r.person, {"projects": 0, "area": 0.0})
+        w = by.setdefault(norm(r.person), {
+            "name": r.person, "total": False, "projects": 0, "paused": 0,
+            "area": None, "remaining": None,
+        })
+        if r.status == PAUSED:
+            w["paused"] += 1
+            continue
         w["projects"] += 1
-        w["area"] += r.area or 0
-    return out
-
-
-def _cross_checks(pd: ProjectsData) -> list[str]:
-    out = []
-    for d in DEPTS:
-        mine = {norm(k): v for k, v in own_workload(pd, d).items()}
-        for row in pd.workload.get(d, []):
-            if row["total"] or row.get("projects") is None:
-                continue
-            own = mine.get(norm(row["name"]))
-            have = own["projects"] if own else 0
-            if int(have) != int(row["projects"]):
-                out.append(
-                    f"Загрузка «{DEPT_RU[d]}», {row['name']}: на листе «Загрузка» "
-                    f"{int(row['projects'])} проектов в работе, на листе отдела — {have}"
-                )
-    return out
+        if r.area is not None:
+            w["area"] = (w["area"] or 0) + r.area
+        if r.remaining is not None:
+            w["remaining"] = (w["remaining"] or 0) + r.remaining
+    rows = sorted(by.values(), key=lambda w: (-w["projects"], w["name"]))
+    if rows:
+        rows.append({
+            "name": "Итого", "total": True,
+            "projects": sum(w["projects"] for w in rows),
+            "paused": sum(w["paused"] for w in rows),
+            "area": _sum(w["area"] for w in rows),
+            "remaining": _sum(w["remaining"] for w in rows),
+        })
+    return rows
 
 
 def query_projects(

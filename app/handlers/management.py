@@ -42,7 +42,7 @@ from app.management_data import (
 )
 from app.mgmt_hiring import hiring_query, parse_hiring, roles
 from app.mgmt_plan import parse_plans, plan_query
-from app.mgmt_projects import DEPTS, parse_projects, people, query_projects
+from app.mgmt_projects import DEPTS, parse_projects, people, query_projects, workload
 from app.notify import alert_admin
 from app.sheets import SheetsClient
 from app.transcribe import Transcriber, voice_to_text
@@ -422,7 +422,7 @@ def _tools(pd, plans: dict, hiring: dict, today) -> dict:
         if pd is None:
             return {"error": "мастер-таблица недоступна"}
         depts = [department] if department in DEPTS else list(DEPTS)
-        return {d: pd.workload.get(d, []) for d in depts}
+        return {d: workload(pd, d) for d in depts}
 
     def get_plan(month, department=None):
         ps = plans.get(int(month))

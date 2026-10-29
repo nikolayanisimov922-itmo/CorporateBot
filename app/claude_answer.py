@@ -107,6 +107,64 @@ def build_context(results: list[SearchResult]) -> str:
     return "\n\n---\n\n".join(parts)
 
 
+# Инструменты для «📈 Управление → 💬 Спросить». Данные считает код, Claude — читает.
+MGMT_TOOLS = [
+    {
+        "name": "get_projects",
+        "description": (
+            "Проекты из мастер-таблицы с фильтрами: номер, название, отдел, статус, этап, "
+            "м², сумма контракта, оплачено, остаток (dh), дата подписания, ответственные. "
+            "Плюс итоги по выборке (кол-во, м², суммы)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "department": {"type": "string", "enum": ["dev", "real", "komp", "none"]},
+                "status": {
+                    "type": "string",
+                    "enum": ["in_progress", "paused", "completed", "refused", "new", "unknown"],
+                },
+                "person": {"type": "string", "description": "Имя ответственного латиницей, напр. Ilya"},
+                "signed_from": {"type": "string", "description": "Дата подписания с, YYYY-MM-DD"},
+                "signed_to": {"type": "string", "description": "Дата подписания по, YYYY-MM-DD"},
+            },
+        },
+    },
+    {
+        "name": "get_workload",
+        "description": "Загрузка сотрудников отдела (официальные листы «Загрузка …»): проекты сейчас, м², остаток оплат.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"department": {"type": "string", "enum": ["dev", "real", "komp"]}},
+        },
+    },
+    {
+        "name": "get_plan",
+        "description": "План-факт месяца по отделам: план, факт накопительно, % выполнения, статус, факты по неделям, ожидаемый темп.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "month": {"type": "integer", "minimum": 1, "maximum": 12},
+                "department": {"type": "string", "description": "Роль/отдел как в таблице, напр. «Маркетинг», «Отдел продаж», «Илья»"},
+            },
+            "required": ["month"],
+        },
+    },
+    {
+        "name": "get_hiring",
+        "description": "Воронка найма по ролям за месяц (или неделю): отклики, скрининг, интервью, тестовое, оффер, выход; источники откликов.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "role": {"type": "string"},
+                "month": {"type": "integer", "minimum": 1, "maximum": 12},
+                "week": {"type": "string", "description": "Диапазон дат недели, напр. 12.10-16.10.2026"},
+            },
+        },
+    },
+]
+
+
 # Модели, у которых «мышление» включено по умолчанию (Claude 5-го поколения).
 _THINKING_MODELS = ("claude-opus-5", "claude-sonnet-5", "claude-haiku-5", "claude-fable-5")
 
@@ -258,6 +316,60 @@ class ClaudeAnswerer:
             for it in items
             if isinstance(it, dict)
         ]
+
+    async def answer_management_question(
+        self, question: str, tools: dict, context: str, model: str | None = None
+    ) -> str:
+        """«📈 Управление → 💬 Спросить»: Claude отвечает, вызывая инструменты.
+
+        tools: {имя: функция(**аргументы) -> dict} — данные уже посчитаны кодом
+        (app/mgmt_*.py); Claude их только читает и формулирует ответ.
+        """
+        system = (
+            "Ты — аналитик компании IO Design (дизайн, ремонт и комплектация интерьеров, "
+            "Дубай/США). Отвечаешь руководителям на вопросы о проектах, загрузке, планах "
+            "и найме.\n"
+            "Правила:\n"
+            "- Отвечай ТОЛЬКО по данным, которые вернули инструменты. Ничего не выдумывай; "
+            "если данных нет или их не хватает — так и скажи.\n"
+            "- Не округляй деньги «на глаз»: суммы пиши точно, валюта — dh (дирхамы).\n"
+            "- Указывай, за какой период и на какую дату цифры.\n"
+            "- Кратко и по-деловому, на языке вопроса. Без markdown-символов (#, *, **); "
+            "списки — с новой строки через «•».\n"
+            "- Отделы: dev — разработка (дизайн-проекты), real — реализация (ремонт/стройка), "
+            "komp — комплектация, none — проекты без типа.\n"
+            f"\n{context}"
+        )
+        messages: list = [{"role": "user", "content": question}]
+        for _ in range(5):
+            resp = await self._create(
+                model=model,
+                max_tokens=1500,
+                system=system,
+                tools=MGMT_TOOLS,
+                messages=messages,
+            )
+            if resp.stop_reason != "tool_use":
+                return "".join(b.text for b in resp.content if b.type == "text").strip()
+            # Весь ответ (включая блоки «мышления») — обратно в историю как есть.
+            messages.append({"role": "assistant", "content": resp.content})
+            results = []
+            for b in resp.content:
+                if b.type != "tool_use":
+                    continue
+                fn = tools.get(b.name)
+                try:
+                    if fn is None:
+                        raise ValueError(f"нет инструмента {b.name}")
+                    out = json.dumps(fn(**(b.input or {})), ensure_ascii=False, default=str)
+                    results.append({"type": "tool_result", "tool_use_id": b.id, "content": out[:30000]})
+                except Exception as err:  # noqa: BLE001
+                    results.append({
+                        "type": "tool_result", "tool_use_id": b.id,
+                        "content": f"Ошибка: {err}", "is_error": True,
+                    })
+            messages.append({"role": "user", "content": results})
+        return ""
 
     async def translate(self, text: str, target: str = "English") -> str:
         """Переводит текст (для двуязычных рассылок). Возвращает только перевод."""

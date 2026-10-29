@@ -53,8 +53,18 @@ def is_out_of_credit(err: Exception) -> bool:
     return "credit balance" in text or "billing" in text
 
 
+def price_for(model: str) -> tuple[float, float]:
+    """Цена по названию модели, в т.ч. с датой в конце (claude-haiku-4-5-20251001)."""
+    if model in PRICES:
+        return PRICES[model]
+    for key in sorted(PRICES, key=len, reverse=True):
+        if model.startswith(key):
+            return PRICES[key]
+    return DEFAULT_PRICE
+
+
 def _cost_usd(model: str, usage) -> float:
-    price_in, price_out = PRICES.get(model, DEFAULT_PRICE)
+    price_in, price_out = price_for(model)
     tokens_in = (
         (getattr(usage, "input_tokens", 0) or 0)
         + (getattr(usage, "cache_creation_input_tokens", 0) or 0) * 1.25

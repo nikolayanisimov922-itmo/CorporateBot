@@ -11,6 +11,7 @@ from __future__ import annotations
 import datetime as dt
 import html
 import logging
+import re
 import threading
 import time
 
@@ -178,3 +179,113 @@ def ping(sheets, sheet_ids: dict[str, str], today: dt.date) -> list[str]:
                 lines.append(f"   ⚠️ нет листа текущего месяца «{cur}»")
         lines.append("")
     return lines
+
+
+# --- разбор ячеек (общее для всех таблиц) --------------------------------------
+
+_JUNK = {"", "#n/a", "n/a", "#ref!", "#value!", "#div/0!", "??", "?", "-", "—", "–"}
+
+
+def norm(v) -> str:
+    """Текст ячейки для сравнения: без регистра и лишних пробелов."""
+    return " ".join(str(v if v is not None else "").split()).casefold()
+
+
+def is_junk(v) -> bool:
+    return norm(v) in _JUNK
+
+
+def cell(row: list, idx: int | None):
+    if idx is None or idx < 0 or idx >= len(row):
+        return None
+    v = row[idx]
+    return None if is_junk(v) else v
+
+
+def to_num(v) -> float | None:
+    """Число из ячейки: 5133, «5 133», «261,126.50», «97781,68 dh». Мусор → None (не 0!)."""
+    if v is None or isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v).strip()
+    if is_junk(s):
+        return None
+    neg = s.startswith("-")
+    s = s.lstrip("-").strip()
+    s = s.replace("%", "")
+    from app.expenses import parse_amount
+
+    x = parse_amount(s.replace("dh", "").replace("DH", "").replace("Dh", ""))
+    if x is None:
+        return None
+    return -x if neg else x
+
+
+_DATE_RE = (
+    (re.compile(r"^(\d{1,2})[./](\d{1,2})[./](\d{4})"), ("d", "m", "y")),
+    (re.compile(r"^(\d{4})-(\d{1,2})-(\d{1,2})"), ("y", "m", "d")),
+)
+
+
+def to_date(v) -> dt.date | None:
+    """Дата из ячейки: «12.09.2026», «2026-09-12», серийное число Excel/Sheets (46079)."""
+    if v is None or isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        if 20000 < v < 80000:  # серийная дата: дни с 30.12.1899
+            return dt.date(1899, 12, 30) + dt.timedelta(days=int(v))
+        return None
+    s = str(v).strip()
+    for rx, order in _DATE_RE:
+        m = rx.match(s)
+        if m:
+            parts = dict(zip(order, (int(x) for x in m.groups())))
+            try:
+                return dt.date(parts["y"], parts["m"], parts["d"])
+            except ValueError:
+                return None
+    return None
+
+
+def find_header(
+    rows: list[list], must: list[str], max_scan: int = 15
+) -> tuple[int, list[str]] | None:
+    """Строка заголовков: первая из первых max_scan, где есть ВСЕ слова из must.
+
+    Возвращает (номер строки, нормализованные заголовки).
+    """
+    for i, row in enumerate(rows[:max_scan]):
+        heads = [norm(c) for c in row]
+        if all(any(m in h for h in heads) for m in must):
+            return i, heads
+    return None
+
+
+def col(heads: list[str], *aliases: str, exact: bool = False) -> int | None:
+    """Номер колонки по одному из названий (сначала точное совпадение, потом «содержит»)."""
+    for a in aliases:
+        a = norm(a)
+        for i, h in enumerate(heads):
+            if h == a:
+                return i
+    if exact:
+        return None
+    for a in aliases:
+        a = norm(a)
+        for i, h in enumerate(heads):
+            if a and a in h:
+                return i
+    return None
+
+
+def fmt_num(x: float | None, money: bool = False) -> str:
+    if x is None:
+        return "—"
+    s = f"{round(x):,}".replace(",", " ") if abs(x) >= 100 or float(x).is_integer() else f"{x:,.1f}".replace(",", " ").replace(".", ",")
+    return f"{s} dh" if money else s
+
+
+def get_sheet(data: dict, title: str) -> list[list]:
+    found = find_title(list(data), title)
+    return data.get(found, []) if found else []

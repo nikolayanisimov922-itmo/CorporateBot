@@ -8,6 +8,7 @@ from app.handlers import (
     broadcast,
     expenses,
     knowledge,
+    management,
     menu,
 )
 
@@ -19,6 +20,7 @@ def setup_routers() -> Router:
     router.include_router(knowledge.router)
     router.include_router(broadcast.router)
     router.include_router(expenses.router)
+    router.include_router(management.router)
     router.include_router(agreements.router)
     router.include_router(blackbox.router)
     router.include_router(billing.router)

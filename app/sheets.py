@@ -56,7 +56,7 @@ class SheetsClient:
 
         ws.append_row(row, value_input_option="USER_ENTERED")
 
-    def explain_error(self, err: Exception) -> str:
+    def explain_error(self, err: Exception, role: str = "Редактор") -> str:
         """Понятное объяснение ошибки Google Sheets для администратора."""
         status = getattr(getattr(err, "response", None), "status_code", None)
         if isinstance(err, gspread.SpreadsheetNotFound) or status == 404:
@@ -67,6 +67,8 @@ class SheetsClient:
         if status == 403:
             return (
                 "У бота нет доступа к таблице. Откройте таблицу → «Настройки "
-                "доступа» → добавьте эту почту с правами «Редактор»:\n" + self.email
+                "доступа» → добавьте эту почту с правами «" + role + "»:\n" + self.email
             )
+        if status == 429:
+            return "Google временно ограничил число запросов к таблицам — пройдёт само через минуту."
         return f"{type(err).__name__}: {err}"[:500]

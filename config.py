@@ -78,6 +78,14 @@ class Config:
     # Таблица «План/факт расходов» (комплектаторы и ПМ).
     expenses_sheet_id: str = ""
 
+    # --- Раздел «📈 Управление» (только руководители + админ) ---
+    mgmt_ids: list = field(default_factory=list)
+    mgmt_projects_sheet_id: str = ""
+    mgmt_plan_sheet_id: str = ""
+    mgmt_hiring_sheet_id: str = ""
+    # Модель для «💬 Спросить»; пусто — та же, что у всего бота.
+    mgmt_model: str = ""
+
     # --- Контроль денег: Claude и хостинг ---
     # Предупредить, когда на Claude останется меньше этой суммы ($).
     claude_low_balance_usd: float = 2.0
@@ -89,6 +97,18 @@ class Config:
     def is_admin(self, user_id: int) -> bool:
         """True только для владельца бота (по числовому Telegram ID)."""
         return self.admin_id != 0 and user_id == self.admin_id
+
+    def is_mgmt(self, user_id: int) -> bool:
+        """Доступ к «📈 Управление»: руководители из MGMT_IDS и админ."""
+        return user_id in self.mgmt_ids or self.is_admin(user_id)
+
+    @property
+    def mgmt_sheet_ids(self) -> dict:
+        return {
+            "projects": self.mgmt_projects_sheet_id,
+            "plan": self.mgmt_plan_sheet_id,
+            "hiring": self.mgmt_hiring_sheet_id,
+        }
 
 
 def load_config() -> Config:
@@ -145,6 +165,11 @@ def load_config() -> Config:
             "GOOGLE_CREDENTIALS_FILE", "google_credentials.json"
         ),
         expenses_sheet_id=_get("GOOGLE_SHEET_EXPENSES") or EXPENSES_DEFAULT_SHEET,
+        mgmt_ids=_ids(_get("MGMT_IDS")),
+        mgmt_projects_sheet_id=_get("MGMT_PROJECTS_SHEET_ID"),
+        mgmt_plan_sheet_id=_get("MGMT_PLAN_SHEET_ID"),
+        mgmt_hiring_sheet_id=_get("MGMT_HIRING_SHEET_ID"),
+        mgmt_model=_get("MGMT_MODEL"),
         claude_low_balance_usd=_float(_get("CLAUDE_LOW_BALANCE_USD", "2"), 2.0),
         # 1–28, чтобы день существовал в любом месяце; 0 — выключено.
         hosting_reminder_day=max(0, min(28, _int(_get("HOSTING_REMINDER_DAY", "1"), 1))),

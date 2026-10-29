@@ -6,6 +6,7 @@ from typing import Any, Awaitable, Callable
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 
+from app.keyboards import current_user_id
 from app.users import UserRegistry
 
 
@@ -22,4 +23,5 @@ class RegisterUserMiddleware(BaseMiddleware):
         user = data.get("event_from_user")
         if user is not None and not user.is_bot:
             self.users.add(user.id, user.full_name or "", user.username or "")
+            current_user_id.set(user.id)
         return await handler(event, data)

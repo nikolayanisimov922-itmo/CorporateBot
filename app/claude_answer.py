@@ -107,6 +107,14 @@ def build_context(results: list[SearchResult]) -> str:
     return "\n\n---\n\n".join(parts)
 
 
+# Модели, у которых «мышление» включено по умолчанию (Claude 5-го поколения).
+_THINKING_MODELS = ("claude-opus-5", "claude-sonnet-5", "claude-haiku-5", "claude-fable-5")
+
+
+def _thinks_by_default(model: str) -> bool:
+    return model.startswith(_THINKING_MODELS)
+
+
 class ClaudeAnswerer:
     """Обёртка над Claude API. Async — не блокирует бота."""
 
@@ -115,16 +123,22 @@ class ClaudeAnswerer:
         self.model = model
         self.billing = billing  # BillingMonitor: учёт трат и тревога «деньги кончились»
 
-    async def _create(self, **kwargs):
+    async def _create(self, model: str | None = None, **kwargs):
         """Вызов Claude + учёт расходов. Ошибку пробрасываем дальше как есть."""
+        model = model or self.model
+        if _thinks_by_default(model):
+            # Новые модели сначала «думают», и это тратит тот же лимит max_tokens:
+            # даём запас и просим думать коротко — задачи бота простые.
+            kwargs["max_tokens"] = max(kwargs.get("max_tokens", 0), 8000)
+            kwargs.setdefault("output_config", {"effort": "low"})
         try:
-            resp = await self.client.messages.create(model=self.model, **kwargs)
+            resp = await self.client.messages.create(model=model, **kwargs)
         except anthropic.APIStatusError as err:
             if self.billing is not None:
                 await self.billing.on_api_error(err)
             raise
         if self.billing is not None:
-            await self.billing.record_usage(self.model, resp.usage)
+            await self.billing.record_usage(model, resp.usage)
         return resp
 
     async def answer(

@@ -53,6 +53,10 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "🔄 <b>Обновить базу</b> — перечитать Notion прямо сейчас.",
         "en": "🔄 <b>Refresh base</b> — re-read Notion right now.",
     },
+    "help_mgmt": {
+        "ru": "📈 <b>Управление</b> — проекты, планы и найм по живым таблицам (для руководителей).",
+        "en": "📈 <b>Management</b> — projects, plans and hiring from the live tables (for managers).",
+    },
     "help_admin_balance": {
         "ru": "💰 <b>Баланс</b> — сколько денег осталось на Claude; сюда же вводить сумму после пополнения.",
         "en": "💰 <b>Balance</b> — Claude credit left; enter the new amount here after a top-up.",

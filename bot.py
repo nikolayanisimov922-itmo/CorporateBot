@@ -19,6 +19,7 @@ from app.billing import BillingMonitor
 from app.claude_answer import ClaudeAnswerer
 from app.expenses import ExpenseStore
 from app.handlers import setup_routers
+from app.management_data import SheetCache
 from app.handlers.expenses import reminders_loop
 from app.knowledge_service import KnowledgeService
 from app.middlewares import RegisterUserMiddleware
@@ -49,7 +50,9 @@ def _ensure_google_credentials_file(config) -> None:
 
 def build_sheets(config) -> SheetsClient | None:
     """Подключает Google Sheets (этап 7). None, если не настроено."""
-    if not config.sheet_ids and not config.expenses_sheet_id:
+    if not config.sheet_ids and not config.expenses_sheet_id and not any(
+        config.mgmt_sheet_ids.values()
+    ):
         logging.warning(
             "Не задан ни один GOOGLE_SHEET_* — раздел «Передать данные» недоступен."
         )
@@ -145,6 +148,9 @@ async def main() -> None:
     sheets = build_sheets(config)
     transcriber = Transcriber()  # модель речи грузится лениво, при первом голосовом
     users = UserRegistry()
+    from app import keyboards
+
+    keyboards.set_mgmt_ids(config.mgmt_ids)
     expense_store = ExpenseStore()
     logging.info("Реестр пользователей: %d чел.", users.count())
 
@@ -190,6 +196,7 @@ async def main() -> None:
         transcriber=transcriber,
         billing=billing,
         expense_store=expense_store,
+        mgmt_cache=SheetCache(),
     )
 
 

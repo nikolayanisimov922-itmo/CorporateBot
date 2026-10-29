@@ -541,22 +541,22 @@ async def mgmt_plan_raw(
         await message.answer(f"Нет листа плана за месяц {month}. Есть: {sorted(plans)}")
         return
     raw = data[ps.title]
-    lines = [f"🔬 <b>{html.escape(ps.title)}</b>", "Недели (колонка факта / колонка %):"]
-    for w in ps.weeks:
-        pct = rowcol_to_a1(1, w.pct_col + 1)[:-1] if w.pct_col is not None else "—"
-        lines.append(f"• {html.escape(w.label)}: {rowcol_to_a1(1, w.col + 1)[:-1]} / {pct}")
-    lines.append("")
+    lines = [f"🔬 <b>{html.escape(ps.title)}</b>", "Ячейки: факт по неделям (итоговый % — последняя колонка %)", ""]
     for ind in ps.indicators:
         if role and role.casefold() not in ind.role.casefold():
             continue
         row = raw[ind.row - 1] if ind.row - 1 < len(raw) else []
-        cells = []
-        for w in ps.weeks:
-            v = row[w.col] if w.col < len(row) else ""
-            p = row[w.pct_col] if w.pct_col is not None and w.pct_col < len(row) else ""
-            cells.append(f"{rowcol_to_a1(ind.row, w.col + 1)}={v!r} ({p!r})")
+        facts = "; ".join(
+            f"{rowcol_to_a1(ind.row, c + 1)}={row[c] if c < len(row) else ''!r}" for c in ind.fact_cols
+        )
+        last_pct = next((c for c in reversed(ind.pct_cols) if c is not None), None)
+        pct = (
+            f"{rowcol_to_a1(ind.row, last_pct + 1)}={row[last_pct] if last_pct < len(row) else ''!r}"
+            if last_pct is not None else "—"
+        )
         lines.append(
             f"<b>{html.escape(ind.role)} · {html.escape(ind.name)}</b> (строка {ind.row}), "
-            f"план {ind.plan!r}\n   " + html.escape("; ".join(cells), quote=False)
+            f"план C{ind.row}={ind.plan!r}\n   факт: {html.escape(facts, quote=False)}\n"
+            f"   итоговый %: {html.escape(pct, quote=False)} → в таблице {ind.table_pct!r}"
         )
     await _send_lines(message, lines)

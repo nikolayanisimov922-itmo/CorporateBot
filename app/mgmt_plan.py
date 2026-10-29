@@ -1,15 +1,19 @@
-"""«📊 Планы»: разбор листов «ПЛАН <МЕСЯЦ>» и выполнение плана (чистые функции).
+"""«📊 Планы»: разбор листов «ПЛАН <МЕСЯЦ>» и выполнение месячного плана (чистые функции).
 
-Структура листа: строка 1 — «Роль | Показатель | План на месяц | Неделя 01.10 - 02.10 |…»;
-неделя — блок из 4 колонок «План недели | Факт | % плана недели | % плана месяца
-(накоп.)» (подписи — во 2-й строке и над каждым отделом). Суммируем ФАКТЫ недель
-(колонки E, I, M, Q, U), а не недельный план. «Роль» заполнена только в первой
-строке блока → протягиваем вниз.
+Как устроен лист:
+  • строка 1 — «Роль | Показатель | План на месяц (колонка C) | Неделя 01.10 - 02.10 | …»;
+  • у КАЖДОГО отдела над его строками своя строка подписей недельного блока:
+      – почти у всех: «План (недели) | Факт | % плана недели | % плана месяца (накоп.)»
+        → факты — колонки E, I, M, Q, U; недельные планы (D, H, L, P, T) НЕ трогаем;
+      – у маркетинга колонки объединены: «Факт | % плана месяца (накоп.)».
+    Поэтому колонки факта и % определяются по подписям над каждым отделом, а не
+    одни на весь лист.
 
-% выполнения считаем сами (сумма фактов / план) — колонка «% накоп.» в таблице
-ломается на пустых неделях. Обратные показатели (бюджеты, стоимость лида): меньше —
-лучше, показываем «в рамках / превышен». Расчётные (стоимость SQL/MQL) не суммируем —
-берём среднее по заполненным неделям и сравниваем с планом.
+Как считаем результат за месяц (накопительно, без разбивки по неделям):
+  • главный маркер — итоговый % выполнения из таблицы (последняя колонка «% плана»
+    в листе месяца); абсолютное число = % × план месяца (колонка C);
+  • маркетинг — сумма фактов по неделям / план; стоимость лида — СРЕДНЕЕ по неделям
+    против плана (меньше — лучше); бюджеты — сумма, «в рамках / превышен».
 """
 from __future__ import annotations
 
@@ -26,9 +30,9 @@ _DATES = re.compile(r"(\d{1,2})\.(\d{1,2})")
 @dataclass
 class Week:
     label: str
-    col: int  # колонка «Факт»
+    start: int  # первая колонка блока недели
+    end: int  # колонка после блока
     months: set = field(default_factory=set)  # месяцы из дат в заголовке
-    pct_col: int | None = None  # колонка «% плана месяца (накоп.)» — для сверки
 
 
 @dataclass
@@ -37,10 +41,24 @@ class Indicator:
     name: str
     plan: float | None
     facts: list  # по неделям, None — не заполнено
+    pcts: list  # «% плана месяца (накоп.)» из таблицы по неделям (доли), None — пусто
     kind: str  # "sum" | "inverse" | "computed"
     money: bool = False
     row: int = 0  # номер строки в таблице (для /mgmt_plan_raw)
-    pcts: list = field(default_factory=list)  # «% накоп.» из таблицы по неделям (доли)
+    fact_cols: list = field(default_factory=list)
+    pct_cols: list = field(default_factory=list)
+
+    @property
+    def marketing(self) -> bool:
+        return "маркет" in norm(self.role)
+
+    @property
+    def table_pct(self) -> float | None:
+        """Итоговый % выполнения из таблицы: последняя заполненная колонка «% накоп.»."""
+        for p in reversed(self.pcts):
+            if p is not None:
+                return p
+        return None
 
 
 @dataclass
@@ -59,15 +77,6 @@ class PlanSheet:
             if i.role not in out:
                 out.append(i.role)
         return out
-
-    @property
-    def current_week(self) -> int | None:
-        """Последняя неделя, где есть хоть один факт."""
-        last = None
-        for w in range(len(self.weeks)):
-            if any(i.facts[w] is not None for i in self.indicators):
-                last = w
-        return last
 
     @property
     def has_plan(self) -> bool:
@@ -118,14 +127,29 @@ def year_for(month: int, today: dt.date) -> int:
     return today.year
 
 
-def _label_col(rows: list[list], c0: int, c1: int, match) -> int | None:
-    """Первая колонка в диапазоне [c0, c1), где в какой-нибудь строке стоит подпись."""
-    for r in rows[:80]:
-        for j in range(c0, min(c1, len(r))):
-            x = norm(r[j])
-            if x and match(x):
-                return j
-    return None
+def _section_cols(
+    row: list, weeks: list[Week], heads: list[str]
+) -> list[tuple[int, int | None]] | None:
+    """Строка подписей отдела → [(колонка «Факт», колонка «% накоп.»)] по неделям.
+
+    None — если это не строка подписей (нет ни одного «Факт»). Колонка % — самая
+    правая в блоке недели с «%» (кроме «% плана недели»): «% плана месяца (накоп.)»
+    или итоговая «% плана» (её подпись может стоять только в 1-й строке листа).
+    """
+    out, found = [], False
+    for w in weeks:
+        fact = pct = None
+        for j in range(w.start, w.end):
+            x = norm(row[j]) if j < len(row) else ""
+            top = heads[j] if j < len(heads) else ""
+            if fact is None and x.startswith("факт"):
+                fact = j
+            for lab in (x, top):
+                if "%" in lab and "недел" not in lab:
+                    pct = j
+        found = found or fact is not None
+        out.append((fact if fact is not None else w.start, pct))
+    return out if found else None
 
 
 def parse_plan_sheet(title: str, rows: list[list], today: dt.date) -> PlanSheet | None:
@@ -143,15 +167,19 @@ def parse_plan_sheet(title: str, rows: list[list], today: dt.date) -> PlanSheet 
     c_name = next((i for i, x in enumerate(heads) if x.startswith("показатель")), 1)
     c_plan = next((i for i, x in enumerate(heads) if x.startswith("план")), 2)
 
-    weeks: list[Week] = []
+    starts = []
     for i, x in enumerate(heads):
         if i <= c_plan or not x:
             continue
         dates = _DATES.findall(x)
         if x.startswith("неделя") or dates:
             raw = str(rows[h][i]).strip()
-            weeks.append(Week(label=raw.replace("Неделя", "").strip() or raw, col=i,
-                              months={int(m) for _, m in dates}))
+            starts.append((i, raw.replace("Неделя", "").strip() or raw, {int(m) for _, m in dates}))
+    width = max((len(r) for r in rows), default=0)
+    weeks = [
+        Week(label, s, starts[k + 1][0] if k + 1 < len(starts) else width, months)
+        for k, (s, label, months) in enumerate(starts)
+    ]
     foreign = [w.label for w in weeks if w.months and month not in w.months]
     if foreign:
         issues.append(
@@ -159,67 +187,38 @@ def parse_plan_sheet(title: str, rows: list[list], today: dt.date) -> PlanSheet 
             "похоже, лист скопирован с другого месяца"
         )
 
-    sub = rows[h + 1] if len(rows) > h + 1 else []
-    has_sub = any("факт" in norm(c) for c in sub)
-    start = h + 2 if has_sub else h + 1
-    # Блок недели — 4 колонки: «План | Факт | % плана недели | % плана месяца (накоп.)».
-    # Подписи стоят не только во 2-й строке, но и над каждым отделом (строка 17 и т.п.),
-    # поэтому ищем их во всех строках внутри блока. Факт — колонка «Факт», не «План»!
-    ends = [w.col for w in weeks[1:]] + [max((len(r) for r in rows), default=0)]
-    for w, end in zip(weeks, ends):
-        fact = _label_col(rows, w.col, end, lambda x: x.startswith("факт"))
-        if fact is None:
-            plan_w = _label_col(rows, w.col, end, lambda x: x == "план" or x.startswith("план "))
-            fact = plan_w + 1 if plan_w is not None and plan_w + 1 < end else None
-        if fact is not None:
-            w.col = fact
-        w.pct_col = _label_col(rows, w.col, end, lambda x: "накоп" in x)
-
+    cols = [(w.start, None) for w in weeks]
     indicators: list[Indicator] = []
     role = ""
-    for rnum, row in enumerate(rows[start:], start=start + 1):
+    for rnum, row in enumerate(rows[h + 1:], start=h + 2):
+        section = _section_cols(row, weeks, heads)
         r = str(cell(row, c_role) or "").strip()
+        if section is not None:
+            cols = section  # подписи нового отдела — дальше читаем по ним
+            if r:
+                role = r
+            continue
         if r:
             role = r
         name = str(cell(row, c_name) or "").strip()
         if not name:
             continue
         kind, money = _kind(name)
-        facts = [to_num(cell(row, w.col)) for w in weeks]
-        pcts = [to_pct(cell(row, w.pct_col)) if w.pct_col is not None else None for w in weeks]
         indicators.append(Indicator(
-            role or "—", name, to_num(cell(row, c_plan)), facts, kind, money, rnum, pcts,
+            role=role or "—",
+            name=name,
+            plan=to_num(cell(row, c_plan)),
+            facts=[to_num(cell(row, f)) for f, _ in cols],
+            pcts=[to_pct(cell(row, p)) if p is not None else None for _, p in cols],
+            kind=kind,
+            money=money,
+            row=rnum,
+            fact_cols=[f for f, _ in cols],
+            pct_cols=[p for _, p in cols],
         ))
     ps = PlanSheet(title, month, year, weeks, indicators, issues)
     issues += _pct_check(ps)
     return ps
-
-
-def _pct_check(ps: "PlanSheet") -> list[str]:
-    """Сверка нашей суммы фактов с колонкой «% накоп.» последней заполненной недели."""
-    cw = ps.current_week
-    if cw is None:
-        return []
-    out = []
-    for ind in ps.indicators:
-        if ind.kind != "sum" or not ind.plan:
-            continue
-        filled = [(i, x) for i, x in enumerate(ind.facts[: cw + 1]) if x is not None]
-        if not filled:
-            continue
-        last_i = filled[-1][0]
-        pct = ind.pcts[last_i] if last_i < len(ind.pcts) else None
-        if pct is None:
-            continue
-        ours = sum(x for _, x in filled)
-        theirs = pct * ind.plan
-        where = f"«{ps.title}», {ind.role} «{ind.name}» (строка {ind.row})"
-        if abs(ours - theirs) > _tolerance(ind.plan):
-            out.append(
-                f"{where}: сумма фактов по неделям {ours:g}, а «% накоп.» даёт ≈{theirs:g} "
-                f"({pct * 100:.0f}%). Проверьте, как вносятся факты."
-            )
-    return out
 
 
 def parse_plans(data: dict, today: dt.date) -> dict[int, PlanSheet]:
@@ -254,13 +253,9 @@ class Result:
     status: str  # 🟢 🟡 🔴 ✅ ⚠️ ⚪
 
 
-def _tolerance(plan: float) -> float:
-    return max(0.5, abs(plan) * 0.02)
-
-
-def evaluate(ind: Indicator, upto_week: int | None, pace: float) -> Result:
-    weeks = ind.facts[: (upto_week + 1) if upto_week is not None else 0]
-    filled = [x for x in weeks if x is not None]
+def evaluate(ind: Indicator, pace: float) -> Result:
+    """Выполнение за месяц накопительно."""
+    filled = [x for x in ind.facts if x is not None]
     if ind.kind == "computed":
         # Стоимость лида: не суммируется — среднее по заполненным неделям.
         fact = sum(filled) / len(filled) if filled else None
@@ -272,31 +267,58 @@ def evaluate(ind: Indicator, upto_week: int | None, pace: float) -> Result:
         if fact is None:
             return Result(ind, fact, None, "⚪")
         return Result(ind, fact, fact / ind.plan, "✅" if fact <= ind.plan else "⚠️")
-    pct = (fact or 0) / ind.plan
+    if not ind.marketing and ind.table_pct is not None:
+        # Главный маркер — итоговый % из таблицы; абсолютное число — от него.
+        pct = ind.table_pct
+        fact = pct * ind.plan
+        if not ind.money:
+            fact = round(fact)  # штуки и люди — целым числом (66,7% от 12 → 8)
+    else:
+        pct = (fact or 0) / ind.plan
     lag = pace - pct
     status = "🟢" if lag <= 0 else ("🟡" if lag <= 0.15 else "🔴")
     return Result(ind, fact, pct, status)
 
 
+def _pct_check(ps: PlanSheet) -> list[str]:
+    """Для /mgmt_check: где сумма фактов не сходится с итоговым % таблицы."""
+    out = []
+    for ind in ps.indicators:
+        if ind.marketing or ind.kind != "sum" or not ind.plan or ind.table_pct is None:
+            continue
+        filled = [x for x in ind.facts if x is not None]
+        if not filled:
+            continue
+        ours = sum(filled)
+        theirs = ind.table_pct * ind.plan
+        if abs(ours - theirs) > max(0.5, abs(ind.plan) * 0.02):
+            out.append(
+                f"«{ps.title}», {ind.role} «{ind.name}» (строка {ind.row}): сумма фактов {ours:g}, "
+                f"а итоговый % в таблице {ind.table_pct * 100:.1f}% (≈{theirs:g}) — бот показывает по %."
+            )
+    return out
+
+
 def plan_query(ps: PlanSheet, role: str | None, today: dt.date) -> dict:
-    """Для «💬 Спросить»: показатели листа (по отделу) с фактом и % по неделям."""
+    """Для «💬 Спросить»: показатели листа (по отделу), накопительно за месяц."""
     pace = workdays_share(ps.year, ps.month, today)
-    cw = ps.current_week
     items = []
     for ind in ps.indicators:
         if role and norm(role) not in norm(ind.role):
             continue
-        r = evaluate(ind, cw, pace)
+        r = evaluate(ind, pace)
         items.append({
-            "department": ind.role, "indicator": ind.name, "plan": ind.plan,
-            "fact_to_date": r.fact, "percent": round(r.pct * 100) if r.pct is not None else None,
-            "status": r.status, "type": ind.kind,
-            "by_week": {ps.weeks[i].label: ind.facts[i] for i in range(len(ps.weeks))},
+            "department": ind.role, "indicator": ind.name, "plan_month": ind.plan,
+            "fact_month_to_date": round(r.fact, 2) if r.fact is not None else None,
+            "percent": round(r.pct * 100, 1) if r.pct is not None else None,
+            "status": r.status,
+            "type": {"sum": "чем больше, тем лучше", "inverse": "бюджет: меньше — лучше",
+                     "computed": "стоимость лида: среднее за месяц, меньше — лучше"}[ind.kind],
         })
     return {
         "sheet": ps.title,
         "month": f"{MONTHS_RU[ps.month - 1]} {ps.year}",
-        "facts_up_to_week": ps.weeks[cw].label if cw is not None else None,
+        "note": "факт накопительно за месяц; % — итоговый % выполнения из таблицы",
         "expected_pace_percent": round(pace * 100),
         "plan_filled": ps.has_plan,
         "indicators": items,

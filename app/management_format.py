@@ -53,10 +53,7 @@ L = {
     "pause_n": {"ru": "на паузе", "en": "paused"},
     "plan": {"ru": "План", "en": "Plan"},
     "plan_none": {"ru": "План на {m} ещё не внесён.", "en": "The plan for {m} hasn't been entered yet."},
-    "plan_upto": {
-        "ru": "Факт накопительно за месяц · заполнено недель: {n} из {total} (последняя {w})",
-        "en": "Month-to-date actuals · weeks filled: {n} of {total} (last {w})",
-    },
+    "plan_upto": {"ru": "Факт накопительно за месяц", "en": "Month-to-date actuals"},
     "plan_nofact": {"ru": "фактов ещё нет", "en": "no actuals yet"},
     "pace": {"ru": "Ожидаемый темп на сегодня: ~{p}%", "en": "Expected pace today: ~{p}%"},
     "no_plan": {"ru": "план не задан", "en": "no plan set"},
@@ -208,11 +205,7 @@ def plan_text(ps: PlanSheet, role: str | None, today: dt.date, lang: str) -> str
     title = f"📊 <b>{tr('plan', lang)} — {m}" + (f" · {e(role)}" if role else "") + "</b>"
     if not ps.has_plan:
         return title + "\n\n" + tr("plan_none", lang, m=month_name(ps.month, lang).lower())
-    cw = ps.current_week
-    upto = (
-        tr("plan_upto", lang, n=cw + 1, total=len(ps.weeks), w=e(ps.weeks[cw].label))
-        if cw is not None else tr("plan_nofact", lang)
-    )
+    upto = tr("plan_upto", lang)
     pace = workdays_share(ps.year, ps.month, today)
     lines = [title, f"<i>{upto}</i>", ""]
     current_role = None
@@ -222,7 +215,7 @@ def plan_text(ps: PlanSheet, role: str | None, today: dt.date, lang: str) -> str
         if not role and ind.role != current_role:
             current_role = ind.role
             lines.append(f"\n<b>{e(ind.role)}</b>")
-        r = evaluate(ind, cw, pace)
+        r = evaluate(ind, pace)
         fact = fmt_num(r.fact, ind.money)
         plan = fmt_num(ind.plan, ind.money)
         if r.status == "⚪" and ind.plan in (None, 0):

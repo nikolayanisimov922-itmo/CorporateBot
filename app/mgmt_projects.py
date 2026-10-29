@@ -1,13 +1,18 @@
 """«📁 Проекты»: разбор мастер-таблицы и расчёты (чистые функции, без сети).
 
-Источник сводки — лист «Общая таблица»; деньги (контракт, оплачено, остаток) —
-листы отделов; загрузка по людям — готовые листы «Загрузка …» (их цифры
-«официальные»), а собственный расчёт по «Общей таблице» — для сверки в /mgmt_check.
-Заголовки ищем по тексту, а не по номерам строк/колонок — таблицы правят руками.
+Два источника — и у каждого своя роль:
+  • «Общая таблица» — сводка по компании (всего / в работе / на паузе / по типам);
+  • листы отделов («Отдел разработки» и т.д.) — всё, что про отдел и людей:
+    сколько проектов в работе у отдела и у каждого сотрудника, м², деньги
+    (контракт / оплачено / остаток). Отделы ведут эти листы сами, статусы и
+    ответственные там — «официальные».
+Готовые листы «Загрузка …» показываем как есть, расхождения с листами отделов —
+в /mgmt_check. Заголовки ищем по тексту, а не по номерам строк/колонок.
 """
 from __future__ import annotations
 
 import datetime as dt
+import re
 from dataclasses import dataclass, field
 
 from app.management_data import (
@@ -45,6 +50,9 @@ _TYPE = {
     "construction": REAL,
     "interior equipment": KOMP,
 }
+# Код проекта по суффиксу номера: 381-02 — дизайн, 381-03 — комплектация, 381-04 — ремонт.
+_SUFFIX = {"02": DEV, "03": KOMP, "04": REAL}
+_SUFFIX_RE = re.compile(r"\d-(\d{2})\b")
 # «Не люди» в колонках ответственных.
 _NOT_PEOPLE = {"without a project", "без проекта", ""}
 
@@ -57,15 +65,35 @@ LOAD_SHEET = {
 
 
 def norm_status(v) -> str:
-    return _STATUS.get(norm(v), UNKNOWN if not norm(v) else UNKNOWN)
+    return _STATUS.get(norm(v), UNKNOWN)
 
 
-def norm_type(v) -> str:
-    return _TYPE.get(norm(v), NOTYPE)
+def dept_by_number(number: str) -> str:
+    m = _SUFFIX_RE.search(number or "")
+    return _SUFFIX.get(m.group(1), NOTYPE) if m else NOTYPE
+
+
+def norm_type(v, number: str = "") -> tuple[str, bool]:
+    """(отдел, взят ли он по коду проекта, потому что тип не заполнен)."""
+    d = _TYPE.get(norm(v))
+    if d:
+        return d, False
+    by_code = dept_by_number(number)
+    return by_code, by_code != NOTYPE
+
+
+def strip_number(name: str, number: str) -> str:
+    """«361-02 Unit 202, …» → «Unit 202, …», если номер уже стоит в начале названия."""
+    n = (name or "").strip()
+    if number and n.startswith(number):
+        return n[len(number):].lstrip(" ,.-—_")
+    return n
 
 
 @dataclass
 class Project:
+    """Строка «Общей таблицы»."""
+
     number: str
     name: str
     dept: str
@@ -76,18 +104,33 @@ class Project:
     signed: dt.date | None = None
     plan_end: dt.date | None = None
     people: dict = field(default_factory=dict)  # роль → имя
-    # Деньги с листа отдела (если нашлись):
+    raw_status: str = ""
+    raw_type: str = ""
+    type_by_code: bool = False
+
+
+@dataclass
+class DeptRow:
+    """Строка листа отдела."""
+
+    dept: str
+    number: str
+    name: str
+    status: str
+    person: str
+    area: float | None = None
     contract: float | None = None
     paid: float | None = None
     remaining: float | None = None
-    raw_status: str = ""
+    signed: dt.date | None = None
     raw_type: str = ""
 
 
 @dataclass
 class ProjectsData:
     projects: list[Project]
-    workload: dict  # отдел → [{"name", "projects", "area", ...}], с листов «Загрузка …»
+    dept_rows: dict  # отдел → [DeptRow]
+    workload: dict  # отдел → [{"name", "projects", "area", ...}] с листов «Загрузка …»
     issues: list[str]
 
 
@@ -125,10 +168,11 @@ def parse_general(rows: list[list], issues: list[str]) -> list[Project]:
             continue
         raw_type = _txt(cell(row, c["type"]))
         raw_status = _txt(cell(row, c["status"]))
+        dept, by_code = norm_type(raw_type, number)
         p = Project(
             number=number,
             name=name,
-            dept=norm_type(raw_type),
+            dept=dept,
             status=norm_status(raw_status),
             stage=_txt(cell(row, c["stage"])),
             area=to_num(cell(row, c["area"])),
@@ -137,41 +181,59 @@ def parse_general(rows: list[list], issues: list[str]) -> list[Project]:
             plan_end=to_date(cell(row, c["plan_end"])),
             raw_status=raw_status,
             raw_type=raw_type,
+            type_by_code=by_code,
         )
         for role in ("designer", "architect", "visualizer", "pm", "foreman"):
             who = _txt(cell(row, c[role]))
             if norm(who) not in _NOT_PEOPLE:
                 p.people[role] = who
-        if p.dept == NOTYPE:
-            issues.append(f"Общая таблица, строка {i}: у проекта {number or name} не указан тип")
+        label = number or name
+        if by_code:
+            issues.append(
+                f"Общая таблица, строка {i}: у проекта {label} не указан тип — "
+                f"считаю по коду как «{DEPT_RU[dept]}»"
+            )
+        elif dept == NOTYPE:
+            issues.append(f"Общая таблица, строка {i}: у проекта {label} не указан тип")
         if p.status == UNKNOWN:
             what = f"непонятный статус «{raw_status}»" if raw_status else "не указан статус"
-            issues.append(f"Общая таблица, строка {i}: у проекта {number or name} {what}")
+            issues.append(f"Общая таблица, строка {i}: у проекта {label} {what}")
         out.append(p)
     return out
 
 
-def _dept_money(rows: list[list], dept: str, issues: list[str]) -> dict[str, dict]:
-    """Деньги и ответственные с листа отдела: {номер проекта: {...}}."""
+def parse_dept_sheet(rows: list[list], dept: str, issues: list[str]) -> list[DeptRow]:
     title = DEPT_SHEET[dept]
     hit = find_header(rows, ["project number"])
     if not hit:
         if rows:
             issues.append(f"«{title}»: не нашёл строку заголовков (Project number)")
-        return {}
+        return []
     h, heads = hit
     c_num = col(heads, "project number")
+    c_name = col(heads, "project name")
+    c_area = col(heads, "area, m2", "area m2", "area")
+    c_type = col(heads, "project type")
     c_contract = col(heads, "contract total", "total project revenue")
-    c_paid = col(heads, "paid", "funds received", exact=True) or col(heads, "funds received")
-    c_rem = col(heads, "remaining", "balance to be received", exact=True) or col(
-        heads, "balance to be received", "remaining"
-    )
+    c_paid = col(heads, "paid", exact=True)
+    if c_paid is None:
+        c_paid = col(heads, "funds received")
+    c_rem = col(heads, "remaining", exact=True)
+    if c_rem is None:
+        c_rem = col(heads, "balance to be received", "remaining")
     c_status = col(heads, "project status", "столбец 5")
-    c_person = col(heads, "responsible ff&e designer", "project manager", "responsible designer")
+    c_person = {
+        DEV: col(heads, "responsible designer"),
+        REAL: col(heads, "project manager"),
+        KOMP: col(heads, "responsible ff&e designer", "ff&e designer"),
+    }[dept]
     c_signed = col(heads, "date of signing", "signing the contract")
     c_plan = col(heads, "completion plan", "date of completion plan")
-    pay_cols = [i for i, x in enumerate(heads) if x.startswith("payment ") and x[8:].strip().isdigit()]
-    out: dict[str, dict] = {}
+    pay_cols = [
+        i for i, x in enumerate(heads)
+        if re.fullmatch(r"payment( amount)? \d+", x)
+    ]
+    out: list[DeptRow] = []
     for i, row in enumerate(rows[h + 1:], start=h + 2):
         number = _txt(cell(row, c_num))
         if not number:
@@ -179,22 +241,38 @@ def _dept_money(rows: list[list], dept: str, issues: list[str]) -> dict[str, dic
         contract = to_num(cell(row, c_contract))
         paid = to_num(cell(row, c_paid))
         if paid is None and pay_cols:
-            parts = [to_num(cell(row, j)) for j in pay_cols]
-            parts = [x for x in parts if x is not None]
+            parts = [x for x in (to_num(cell(row, j)) for j in pay_cols) if x is not None]
             paid = sum(parts) if parts else None
         rem = to_num(cell(row, c_rem))
         if rem is None and contract is not None and paid is not None:
             rem = contract - paid
-        status = norm_status(cell(row, c_status)) if c_status is not None else UNKNOWN
-        out[number] = {
-            "contract": contract, "paid": paid, "remaining": rem,
-            "person": _txt(cell(row, c_person)), "status": status,
-        }
-        if dept == KOMP and status in (ACTIVE, PAUSED):
-            if c_signed is not None and to_date(cell(row, c_signed)) is None:
-                issues.append(f"«{title}», строка {i}: у проекта {number} нет даты подписания")
-            if c_plan is not None and to_date(cell(row, c_plan)) is None:
-                issues.append(f"«{title}», строка {i}: у проекта {number} нет плановой даты завершения")
+        raw_status = _txt(cell(row, c_status))
+        person = _txt(cell(row, c_person))
+        r = DeptRow(
+            dept=dept,
+            number=number,
+            name=_txt(cell(row, c_name)),
+            status=norm_status(raw_status),
+            person="" if norm(person) in _NOT_PEOPLE else person,
+            area=to_num(cell(row, c_area)),
+            contract=contract,
+            paid=paid,
+            remaining=rem,
+            signed=to_date(cell(row, c_signed)),
+            raw_type=_txt(cell(row, c_type)),
+        )
+        out.append(r)
+        if r.status == UNKNOWN:
+            what = f"непонятный статус «{raw_status}»" if raw_status else "не указан статус"
+            issues.append(f"«{title}», строка {i}: у проекта {number} {what}")
+        if r.status in (ACTIVE, PAUSED):
+            if not r.person:
+                issues.append(f"«{title}», строка {i}: у проекта {number} не указан ответственный")
+            if dept == KOMP:
+                if c_signed is not None and r.signed is None:
+                    issues.append(f"«{title}», строка {i}: у проекта {number} нет даты подписания")
+                if c_plan is not None and to_date(cell(row, c_plan)) is None:
+                    issues.append(f"«{title}», строка {i}: у проекта {number} нет плановой даты завершения")
     return out
 
 
@@ -223,7 +301,7 @@ def parse_workload(rows: list[list], dept: str) -> list[dict]:
         name = _txt(cell(row, c_name))
         if not name:
             if out:
-                break  # ниже листа — другие таблицы (помесячная динамика и т.п.)
+                break  # ниже — другие таблицы (помесячная динамика и т.п.)
             continue
         if norm(name) in _NOT_PEOPLE:
             continue
@@ -245,56 +323,48 @@ def parse_workload(rows: list[list], dept: str) -> list[dict]:
 def parse_projects(data: dict) -> ProjectsData:
     issues: list[str] = []
     projects = parse_general(get_sheet(data, "Общая таблица"), issues)
-    by_num = {p.number: p for p in projects if p.number}
-    for dept in DEPTS:
-        money = _dept_money(get_sheet(data, DEPT_SHEET[dept]), dept, issues)
-        for number, m in money.items():
-            p = by_num.get(number)
-            if p is None:
-                continue
-            p.contract, p.paid, p.remaining = m["contract"], m["paid"], m["remaining"]
-            if m["person"] and norm(m["person"]) not in _NOT_PEOPLE:
-                p.people.setdefault("dept_person", m["person"])
+    dept_rows = {d: parse_dept_sheet(get_sheet(data, DEPT_SHEET[d]), d, issues) for d in DEPTS}
     workload = {d: parse_workload(get_sheet(data, LOAD_SHEET[d]), d) for d in DEPTS}
-    issues += _workload_check(projects, workload)
-    return ProjectsData(projects, workload, issues)
+    pd = ProjectsData(projects, dept_rows, workload, issues)
+    issues += _cross_checks(pd)
+    return pd
 
 
 # --- расчёты --------------------------------------------------------------------
 
-def person_of(p: Project) -> str:
-    """Главный ответственный проекта в его отделе."""
-    if p.dept == DEV:
-        return p.people.get("designer") or p.people.get("dept_person", "")
-    if p.dept == REAL:
-        return p.people.get("pm") or p.people.get("dept_person", "")
-    if p.dept == KOMP:
-        return p.people.get("dept_person") or p.people.get("pm", "")
-    return ""
+def _sum(values) -> float | None:
+    vals = [v for v in values if v is not None]
+    return sum(vals) if vals else None
 
 
 def summary(pd: ProjectsData) -> dict:
+    """Сводка по компании — по «Общей таблице»."""
     ps = pd.projects
     by_status = {s: sum(1 for p in ps if p.status == s) for s in (ACTIVE, PAUSED, DONE, REFUSED, NEW, UNKNOWN)}
     by_dept = {}
     for d in DEPTS + (NOTYPE,):
         dp = [p for p in ps if p.dept == d]
-        live = [p for p in dp if p.status in (ACTIVE, PAUSED)]
         by_dept[d] = {
             "total": len(dp),
             "active": sum(1 for p in dp if p.status == ACTIVE),
             "paused": sum(1 for p in dp if p.status == PAUSED),
-            "area_active": sum(p.area or 0 for p in dp if p.status == ACTIVE),
-            "contract": _sum(p.contract if p.contract is not None else p.revenue for p in live),
-            "paid": _sum(p.paid for p in live),
-            "remaining": _sum(p.remaining for p in live),
         }
     return {"total": len(ps), "by_status": by_status, "by_dept": by_dept}
 
 
-def _sum(values) -> float | None:
-    vals = [v for v in values if v is not None]
-    return sum(vals) if vals else None
+def dept_summary(pd: ProjectsData, d: str) -> dict:
+    """Отдел — по его собственному листу. Деньги — по проектам «In progress»."""
+    rows = pd.dept_rows.get(d, [])
+    active = [r for r in rows if r.status == ACTIVE]
+    return {
+        "total": len(rows),
+        "active": len(active),
+        "paused": sum(1 for r in rows if r.status == PAUSED),
+        "area_active": _sum(r.area for r in active),
+        "contract": _sum(r.contract for r in active),
+        "paid": _sum(r.paid for r in active),
+        "remaining": _sum(r.remaining for r in active),
+    }
 
 
 def signed_in_month(pd: ProjectsData, year: int, month: int) -> list[Project]:
@@ -304,44 +374,60 @@ def signed_in_month(pd: ProjectsData, year: int, month: int) -> list[Project]:
     )
 
 
-def own_workload(pd: ProjectsData, dept: str) -> dict[str, dict]:
-    """Загрузка по «Общей таблице»: активные проекты и м² на человека."""
+def people(pd: ProjectsData, d: str) -> list[str]:
+    """Сотрудники отдела: сначала как на листе «Загрузка», потом остальные с листа отдела."""
+    names = [r["name"] for r in pd.workload.get(d, []) if not r["total"]]
+    known = {norm(n) for n in names}
+    for r in pd.dept_rows.get(d, []):
+        if r.person and r.status in (ACTIVE, PAUSED) and norm(r.person) not in known:
+            names.append(r.person)
+            known.add(norm(r.person))
+    return names
+
+
+def person_projects(pd: ProjectsData, d: str, name: str) -> list[DeptRow]:
+    """Проекты человека в работе и на паузе — по листу отдела."""
+    n = norm(name)
+    rows = [r for r in pd.dept_rows.get(d, []) if r.status in (ACTIVE, PAUSED) and norm(r.person) == n]
+    return sorted(rows, key=lambda r: (r.status != ACTIVE, r.number))
+
+
+def own_workload(pd: ProjectsData, d: str) -> dict[str, dict]:
+    """Загрузка по листу отдела: проекты «In progress» и м² на человека."""
     out: dict[str, dict] = {}
-    for p in pd.projects:
-        if p.dept != dept or p.status != ACTIVE:
+    for r in pd.dept_rows.get(d, []):
+        if r.status != ACTIVE or not r.person:
             continue
-        who = person_of(p)
-        if not who:
-            continue
-        w = out.setdefault(who, {"projects": 0, "area": 0.0})
+        w = out.setdefault(r.person, {"projects": 0, "area": 0.0})
         w["projects"] += 1
-        w["area"] += p.area or 0
+        w["area"] += r.area or 0
     return out
 
 
-def _workload_check(projects: list[Project], workload: dict) -> list[str]:
-    pd = ProjectsData(projects, workload, [])
+def _cross_checks(pd: ProjectsData) -> list[str]:
     out = []
     for d in DEPTS:
         mine = {norm(k): v for k, v in own_workload(pd, d).items()}
-        for row in workload.get(d, []):
+        for row in pd.workload.get(d, []):
             if row["total"] or row.get("projects") is None:
                 continue
             own = mine.get(norm(row["name"]))
-            if own and int(own["projects"]) != int(row["projects"]):
+            have = own["projects"] if own else 0
+            if int(have) != int(row["projects"]):
                 out.append(
                     f"Загрузка «{DEPT_RU[d]}», {row['name']}: на листе «Загрузка» "
-                    f"{int(row['projects'])} проектов, по «Общей таблице» — {own['projects']}"
+                    f"{int(row['projects'])} проектов в работе, на листе отдела — {have}"
+                )
+        # Проекты на листе отдела, у которых в «Общей таблице» другой тип.
+        general = {p.number: p for p in pd.projects}
+        for r in pd.dept_rows.get(d, []):
+            p = general.get(r.number)
+            if p and p.dept not in (d, NOTYPE) and r.status in (ACTIVE, PAUSED):
+                out.append(
+                    f"Проект {r.number} на листе «{DEPT_SHEET[d]}», а в «Общей таблице» "
+                    f"у него тип «{p.raw_type or DEPT_RU[p.dept]}»"
                 )
     return out
-
-
-def person_projects(pd: ProjectsData, dept: str, name: str) -> list[Project]:
-    n = norm(name)
-    return [
-        p for p in pd.projects
-        if p.dept == dept and p.status in (ACTIVE, PAUSED) and norm(person_of(p)) == n
-    ]
 
 
 def query_projects(
@@ -353,36 +439,65 @@ def query_projects(
     signed_to: dt.date | None = None,
     limit: int = 60,
 ) -> dict:
-    """Для «💬 Спросить»: отфильтрованные проекты + агрегаты (компактный JSON)."""
-    ps = pd.projects
-    if department:
-        ps = [p for p in ps if p.dept == department]
-    if status:
-        ps = [p for p in ps if p.status == status]
-    if person:
-        n = norm(person)
-        ps = [p for p in ps if any(n in norm(v) for v in p.people.values())]
-    if signed_from:
-        ps = [p for p in ps if p.signed and p.signed >= signed_from]
-    if signed_to:
-        ps = [p for p in ps if p.signed and p.signed <= signed_to]
-    items = [
-        {
-            "number": p.number, "name": p.name, "department": p.dept, "status": p.status,
-            "stage": p.stage, "area_m2": p.area,
-            "contract_dh": p.contract if p.contract is not None else p.revenue,
-            "paid_dh": p.paid, "remaining_dh": p.remaining,
-            "signed": p.signed.isoformat() if p.signed else None,
-            "responsible": p.people,
+    """Для «💬 Спросить»: проекты с фильтрами + итоги (компактный JSON).
+
+    С отделом или человеком — по листам отделов (там деньги и ответственные),
+    без них — по «Общей таблице».
+    """
+    if department or person:
+        depts = [department] if department in DEPTS else list(DEPTS)
+        rows = [r for d in depts for r in pd.dept_rows.get(d, [])]
+        if status:
+            rows = [r for r in rows if r.status == status]
+        if person:
+            n = norm(person)
+            rows = [r for r in rows if n in norm(r.person)]
+        if signed_from:
+            rows = [r for r in rows if r.signed and r.signed >= signed_from]
+        if signed_to:
+            rows = [r for r in rows if r.signed and r.signed <= signed_to]
+        items = [
+            {
+                "number": r.number, "name": strip_number(r.name, r.number), "department": r.dept,
+                "status": r.status, "responsible": r.person, "area_m2": r.area,
+                "contract_dh": r.contract, "paid_dh": r.paid, "remaining_dh": r.remaining,
+                "signed": r.signed.isoformat() if r.signed else None,
+            }
+            for r in rows
+        ]
+        totals = {
+            "total_area_m2": _sum(r.area for r in rows),
+            "total_contract_dh": _sum(r.contract for r in rows),
+            "total_paid_dh": _sum(r.paid for r in rows),
+            "total_remaining_dh": _sum(r.remaining for r in rows),
         }
-        for p in ps
-    ]
+        source = "листы отделов"
+    else:
+        ps = pd.projects
+        if status:
+            ps = [p for p in ps if p.status == status]
+        if signed_from:
+            ps = [p for p in ps if p.signed and p.signed >= signed_from]
+        if signed_to:
+            ps = [p for p in ps if p.signed and p.signed <= signed_to]
+        items = [
+            {
+                "number": p.number, "name": strip_number(p.name, p.number), "department": p.dept,
+                "status": p.status, "stage": p.stage, "area_m2": p.area,
+                "revenue_dh": p.revenue, "signed": p.signed.isoformat() if p.signed else None,
+                "responsible": p.people,
+            }
+            for p in ps
+        ]
+        totals = {
+            "total_area_m2": _sum(p.area for p in ps),
+            "total_revenue_dh": _sum(p.revenue for p in ps),
+        }
+        source = "Общая таблица"
     return {
+        "source": source,
         "count": len(items),
-        "total_area_m2": _sum(p.area for p in ps),
-        "total_contract_dh": _sum((p.contract if p.contract is not None else p.revenue) for p in ps),
-        "total_paid_dh": _sum(p.paid for p in ps),
-        "total_remaining_dh": _sum(p.remaining for p in ps),
+        **totals,
         "projects": items[:limit],
         "truncated": len(items) > limit,
     }

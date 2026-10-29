@@ -15,9 +15,12 @@ from app.mgmt_projects import (
     DEPTS,
     NOTYPE,
     PAUSED,
+    DEPT_SHEET,
     ProjectsData,
+    dept_summary,
     person_projects,
     signed_in_month,
+    strip_number,
     summary,
 )
 
@@ -36,7 +39,8 @@ L = {
     "by_dept": {"ru": "По отделам (в работе / пауза)", "en": "By department (in progress / paused)"},
     "notype": {"ru": "Без типа", "en": "No type"},
     "projects_n": {"ru": "проектов", "en": "projects"},
-    "money": {"ru": "Деньги по проектам в работе и на паузе", "en": "Money for active and paused projects"},
+    "money": {"ru": "Деньги по проектам в работе (In Progress)", "en": "Money for projects in progress"},
+    "src_dept": {"ru": "по листу «{s}»", "en": "from the «{s}» sheet"},
     "contract": {"ru": "контракты", "en": "contracts"},
     "paid": {"ru": "оплачено", "en": "paid"},
     "remaining": {"ru": "остаток", "en": "remaining"},
@@ -48,7 +52,10 @@ L = {
     "pause_n": {"ru": "на паузе", "en": "paused"},
     "plan": {"ru": "План", "en": "Plan"},
     "plan_none": {"ru": "План на {m} ещё не внесён.", "en": "The plan for {m} hasn't been entered yet."},
-    "plan_upto": {"ru": "факт по неделю {w}", "en": "actuals up to week {w}"},
+    "plan_upto": {
+        "ru": "Факт накопительно за месяц · заполнено недель: {n} из {total} (последняя {w})",
+        "en": "Month-to-date actuals · weeks filled: {n} of {total} (last {w})",
+    },
     "plan_nofact": {"ru": "фактов ещё нет", "en": "no actuals yet"},
     "pace": {"ru": "Ожидаемый темп на сегодня: ~{p}%", "en": "Expected pace today: ~{p}%"},
     "no_plan": {"ru": "план не задан", "en": "no plan set"},
@@ -120,9 +127,10 @@ def projects_summary(pd: ProjectsData, lang: str) -> str:
 
 
 def projects_dept(pd: ProjectsData, d: str, lang: str) -> str:
-    x = summary(pd)["by_dept"][d]
+    x = dept_summary(pd, d)
     lines = [
         f"📁 <b>{dept_name(d, lang)}</b>",
+        f"<i>{tr('src_dept', lang, s=DEPT_SHEET[d])}</i>",
         "",
         f"{tr('total', lang)}: {x['total']}",
         f"🟢 {tr('active', lang)}: {x['active']} · {fmt_num(x['area_active'])} м²",
@@ -157,11 +165,17 @@ def workload_text(pd: ProjectsData, d: str, lang: str) -> str:
 
 def person_list(pd: ProjectsData, d: str, name: str, lang: str, limit: int = 40) -> str:
     ps = person_projects(pd, d, name)
-    lines = [f"👤 <b>{e(name)}</b> — {dept_name(d, lang)}: {len(ps)}", ""]
+    active = sum(1 for p in ps if p.status == ACTIVE)
+    lines = [
+        f"👤 <b>{e(name)}</b> — {dept_name(d, lang)}",
+        f"🟢 {tr('active', lang)}: {active}   ⏸ {tr('paused', lang)}: {len(ps) - active}",
+        "",
+    ]
     for p in ps[:limit]:
         icon = "🟢" if p.status == ACTIVE else "⏸"
         area = f" · {fmt_num(p.area)} м²" if p.area is not None else ""
-        lines.append(f"{icon} {e(p.number)} {e(p.name)}{area}")
+        rem = f" · {tr('remaining', lang)} {fmt_num(p.remaining, True)}" if p.remaining else ""
+        lines.append(f"{icon} {e(p.number)} {e(strip_number(p.name, p.number))}{area}{rem}")
     if len(ps) > limit:
         lines.append(f"… +{len(ps) - limit}")
     return "\n".join(lines)
@@ -180,7 +194,7 @@ def signings_text(pd: ProjectsData, year: int, month: int, lang: str) -> str:
         lines.append(f"<b>{dept_name(d, lang)}</b> — {len(items)}" + (f" · {fmt_num(total, True)}" if total else ""))
         for p in items[:30]:
             rev = f" · {fmt_num(p.revenue, True)}" if p.revenue is not None else ""
-            lines.append(f"• {p.signed:%d.%m} {e(p.number)} {e(p.name)}{rev}")
+            lines.append(f"• {p.signed:%d.%m} {e(p.number)} {e(strip_number(p.name, p.number))}{rev}")
         lines.append("")
     return "\n".join(lines).strip()
 
@@ -193,7 +207,10 @@ def plan_text(ps: PlanSheet, role: str | None, today: dt.date, lang: str) -> str
     if not ps.has_plan:
         return title + "\n\n" + tr("plan_none", lang, m=month_name(ps.month, lang).lower())
     cw = ps.current_week
-    upto = tr("plan_upto", lang, w=e(ps.weeks[cw].label)) if cw is not None else tr("plan_nofact", lang)
+    upto = (
+        tr("plan_upto", lang, n=cw + 1, total=len(ps.weeks), w=e(ps.weeks[cw].label))
+        if cw is not None else tr("plan_nofact", lang)
+    )
     pace = workdays_share(ps.year, ps.month, today)
     lines = [title, f"<i>{upto}</i>", ""]
     current_role = None
@@ -208,7 +225,11 @@ def plan_text(ps: PlanSheet, role: str | None, today: dt.date, lang: str) -> str
         plan = fmt_num(ind.plan, ind.money)
         if r.status == "⚪" and ind.plan in (None, 0):
             lines.append(f"⚪ {e(ind.name)}: {fact} ({tr('no_plan', lang)})")
-        elif ind.kind in ("inverse", "computed"):
+        elif ind.kind == "computed":
+            word = tr("within", lang) if r.status == "✅" else (tr("over", lang) if r.status == "⚠️" else "")
+            avg = "среднее " if lang != "en" else "avg "
+            lines.append(f"{r.status} {e(ind.name)}: {avg}{fact} / {plan}" + (f" — {word}" if word else ""))
+        elif ind.kind == "inverse":
             word = tr("within", lang) if r.status == "✅" else (tr("over", lang) if r.status == "⚠️" else "")
             lines.append(f"{r.status} {e(ind.name)}: {fact} / {plan}" + (f" — {word}" if word else ""))
         else:

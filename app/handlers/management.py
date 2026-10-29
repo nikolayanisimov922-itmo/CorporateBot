@@ -42,7 +42,7 @@ from app.management_data import (
 )
 from app.mgmt_hiring import hiring_query, parse_hiring, roles
 from app.mgmt_plan import parse_plans, plan_query
-from app.mgmt_projects import DEPTS, parse_projects, query_projects
+from app.mgmt_projects import DEPTS, parse_projects, people, query_projects
 from app.notify import alert_admin
 from app.sheets import SheetsClient
 from app.transcribe import Transcriber, voice_to_text
@@ -246,15 +246,15 @@ def _projects_view(pd, args: list[str], today, lang: str):
         return fm.projects_dept(pd, args[1], lang), _kb([_back("pr:dept")])
     if sub == "l" and len(args) > 1 and args[1] in DEPTS:
         d = args[1]
-        people = [r["name"] for r in pd.workload.get(d, []) if not r["total"]]
-        rows = [[_btn(f"📂 {n}", f"{CB}:pr:p:{d}:{i}")] for i, n in enumerate(people[:12])]
+        names = people(pd, d)
+        rows = [[_btn(f"📂 {n}", f"{CB}:pr:p:{d}:{i}")] for i, n in enumerate(names[:12])]
         return fm.workload_text(pd, d, lang), _kb(rows + [_back("pr:load")])
     if sub == "p" and len(args) > 2 and args[1] in DEPTS:
         d = args[1]
-        people = [r["name"] for r in pd.workload.get(d, []) if not r["total"]]
+        names = people(pd, d)
         i = int(args[2]) if args[2].isdigit() else -1
-        if 0 <= i < len(people):
-            return fm.person_list(pd, d, people[i], lang), _kb([_back(f"pr:l:{d}")])
+        if 0 <= i < len(names):
+            return fm.person_list(pd, d, names[i], lang), _kb([_back(f"pr:l:{d}")])
     if sub == "sign":
         y, m = today.year, today.month
         if len(args) > 1 and "-" in args[1]:
@@ -511,3 +511,52 @@ async def _send_lines(message: Message, lines: list[str]) -> None:
         chunk += line + "\n"
     if chunk.strip():
         await message.answer(chunk)
+
+
+@router.message(Command("mgmt_plan_raw"))
+async def mgmt_plan_raw(
+    message: Message, config: Config, sheets: SheetsClient | None, mgmt_cache: SheetCache
+) -> None:
+    """Админ: какие ячейки листа плана бот читает для показателей отдела.
+
+    /mgmt_plan_raw HR  ·  /mgmt_plan_raw 10 Маркетинг (10 — номер месяца)
+    """
+    if not config.is_admin(message.from_user.id):
+        return
+    from gspread.utils import rowcol_to_a1
+
+    args = (message.text or "").split(maxsplit=1)[1:] or [""]
+    words = args[0].split()
+    today = now_dubai().date()
+    month = int(words[0]) if words and words[0].isdigit() else today.month
+    role = " ".join(w for w in words if not w.isdigit())
+    res, err = await _load(PLAN, config, sheets, mgmt_cache, message.bot, force=True)
+    if res is None:
+        await message.answer("❌ Таблица план-факта недоступна.")
+        return
+    data = res[0]
+    plans = parse_plans(data, today)
+    ps = plans.get(month)
+    if ps is None:
+        await message.answer(f"Нет листа плана за месяц {month}. Есть: {sorted(plans)}")
+        return
+    raw = data[ps.title]
+    lines = [f"🔬 <b>{html.escape(ps.title)}</b>", "Недели (колонка факта / колонка %):"]
+    for w in ps.weeks:
+        pct = rowcol_to_a1(1, w.pct_col + 1)[:-1] if w.pct_col is not None else "—"
+        lines.append(f"• {html.escape(w.label)}: {rowcol_to_a1(1, w.col + 1)[:-1]} / {pct}")
+    lines.append("")
+    for ind in ps.indicators:
+        if role and role.casefold() not in ind.role.casefold():
+            continue
+        row = raw[ind.row - 1] if ind.row - 1 < len(raw) else []
+        cells = []
+        for w in ps.weeks:
+            v = row[w.col] if w.col < len(row) else ""
+            p = row[w.pct_col] if w.pct_col is not None and w.pct_col < len(row) else ""
+            cells.append(f"{rowcol_to_a1(ind.row, w.col + 1)}={v!r} ({p!r})")
+        lines.append(
+            f"<b>{html.escape(ind.role)} · {html.escape(ind.name)}</b> (строка {ind.row}), "
+            f"план {ind.plan!r}\n   " + html.escape("; ".join(cells), quote=False)
+        )
+    await _send_lines(message, lines)

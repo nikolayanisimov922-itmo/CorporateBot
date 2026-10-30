@@ -64,7 +64,8 @@ class SheetsClient:
                 "Таблица не найдена. Проверьте ID в .env (кусок ссылки между /d/ "
                 "и /edit) и что почта бота добавлена в таблицу:\n" + self.email
             )
-        if status == 403:
+        # gspread при открытии таблицы превращает ответ 403 в PermissionError без текста.
+        if status == 403 or isinstance(err, PermissionError):
             return (
                 "У бота нет доступа к таблице. Откройте таблицу → «Настройки "
                 "доступа» → добавьте эту почту с правами «" + role + "»:\n" + self.email

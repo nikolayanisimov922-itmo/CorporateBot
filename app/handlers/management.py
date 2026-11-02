@@ -560,3 +560,41 @@ async def mgmt_plan_raw(
             f"   итоговый %: {html.escape(pct, quote=False)} → в таблице {ind.table_pct!r}"
         )
     await _send_lines(message, lines)
+
+
+_ROLE_RU = {"writer": "Редактор ✅", "owner": "Владелец ✅", "reader": "Читатель", "commenter": "Комментатор"}
+
+
+@router.message(Command("sheets_check"))
+async def sheets_check(message: Message, config: Config, sheets: SheetsClient | None) -> None:
+    """Админ: проверить «вживую» доступ бота ко всем таблицам и его права в каждой."""
+    if not config.is_admin(message.from_user.id):
+        return
+    if sheets is None:
+        await message.answer("❌ Google Sheets не подключены (нет google_credentials.json).")
+        return
+    tables = [
+        ("🤝 Договорённости", config.sheet_ids.get("GOOGLE_SHEET_AGREEMENTS"), True),
+        ("⬛ Черный ящик", config.sheet_ids.get("GOOGLE_SHEET_BLACKBOX"), True),
+        ("📤 План/факт расходов", config.expenses_sheet_id, True),
+        ("📈 Мастер-таблица проектов", config.mgmt_projects_sheet_id, False),
+        ("📈 План-факт", config.mgmt_plan_sheet_id, False),
+        ("📈 Найм", config.mgmt_hiring_sheet_id, False),
+    ]
+    await message.answer("🔎 Проверяю доступ бота к таблицам…")
+    lines = ["🔎 <b>Доступ бота к таблицам</b>", ""]
+    for title, sheet_id, needs_write in tables:
+        if not sheet_id:
+            lines.append(f"⚪ {title}: не задан ID в .env")
+            continue
+        res = await asyncio.to_thread(sheets.check_access, sheet_id)
+        need = "нужен «Редактор»" if needs_write else "нужен «Читатель»"
+        if not res["ok"]:
+            why = sheets.explain_error(res["error"], role="Редактор" if needs_write else "Читатель")
+            lines.append(f"❌ {title} ({need}): {html.escape(why)}")
+            continue
+        role = _ROLE_RU.get(res["role"], res["role"])
+        warn = " ⚠️ записывать не сможет" if needs_write and res["role"] in ("reader", "commenter") else ""
+        lines.append(f"✅ {title} «{html.escape(res['title'])}»: права бота — {html.escape(str(role))}{warn}")
+    lines += ["", f"Почта бота: <code>{sheets.email}</code>"]
+    await _send_lines(message, lines)

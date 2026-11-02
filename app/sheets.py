@@ -56,6 +56,27 @@ class SheetsClient:
 
         ws.append_row(row, value_input_option="USER_ENTERED")
 
+    def check_access(self, spreadsheet_id: str) -> dict:
+        """Проверка доступа «вживую» (без кэша): открывается ли таблица и какие у бота права.
+
+        Блокирующий вызов. Возвращает {"ok", "title", "role", "error"}.
+        """
+        try:
+            ss = self._gc.open_by_key(spreadsheet_id)
+        except Exception as err:  # noqa: BLE001
+            return {"ok": False, "title": "", "role": None, "error": err}
+        role = None
+        try:
+            for perm in ss.list_permissions():
+                if (perm.get("emailAddress") or "").lower() == self.email.lower():
+                    role = perm.get("role")
+                    break
+            if role is None:
+                role = "по ссылке/через папку"
+        except Exception:  # noqa: BLE001
+            role = "не удалось узнать"
+        return {"ok": True, "title": ss.title, "role": role, "error": None}
+
     def explain_error(self, err: Exception, role: str = "Редактор") -> str:
         """Понятное объяснение ошибки Google Sheets для администратора."""
         status = getattr(getattr(err, "response", None), "status_code", None)

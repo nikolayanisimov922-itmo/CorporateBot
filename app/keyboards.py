@@ -15,6 +15,7 @@ BTN_KNOWLEDGE = "📚 База знаний / Knowledge base"
 BTN_SEND_DATA = "📤 Передать данные / Submit data"
 BTN_AGREEMENTS = "🤝 Договорённости / Client notes"
 BTN_BLACKBOX = "⬛ Черный ящик / Black box"
+BTN_ABSENCE = "🏖 Отсутствие / Time off"
 BTN_BROADCAST = "📢 Рассылка / Broadcast"
 BTN_REFRESH = "🔄 Обновить базу / Refresh"
 BTN_BALANCE = "💰 Баланс / Balance"
@@ -23,6 +24,12 @@ BTN_HELP = "ℹ️ Помощь / Help"
 BTN_LANG = "🌐 English / Русский"
 BTN_EXIT = "⬅️ Выйти в меню / Back to menu"
 BTN_CANCEL = "❌ Отмена / Cancel"
+
+# Все кнопки главного меню — чтобы разделы с вводом текста их не «съедали».
+MAIN_BUTTONS = {
+    BTN_KNOWLEDGE, BTN_SEND_DATA, BTN_AGREEMENTS, BTN_BLACKBOX, BTN_ABSENCE, BTN_BROADCAST,
+    BTN_REFRESH, BTN_BALANCE, BTN_MGMT, BTN_HELP, BTN_LANG, BTN_CANCEL,
+}
 
 # callback_data для подтверждения рассылки
 CB_BROADCAST_SEND = "bcast_send"
@@ -55,6 +62,7 @@ def main_menu(is_admin: bool = False) -> ReplyKeyboardMarkup:
         [KeyboardButton(text=BTN_SEND_DATA)],
         [KeyboardButton(text=BTN_AGREEMENTS)],
         [KeyboardButton(text=BTN_BLACKBOX)],
+        [KeyboardButton(text=BTN_ABSENCE)],
     ]
     if is_admin or current_user_id.get() in _mgmt_ids:
         rows.append([KeyboardButton(text=BTN_MGMT)])

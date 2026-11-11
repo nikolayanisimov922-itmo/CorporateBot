@@ -338,7 +338,7 @@ async def ask_question(
     if not config.is_mgmt(message.from_user.id):
         await state.clear()
         return
-    if message.text and message.text in _MAIN_BUTTONS:
+    if message.text and message.text in kb.MAIN_BUTTONS:
         await state.clear()
         raise SkipHandler  # нажата кнопка главного меню — пусть её обработает свой раздел
     lang = users.get_lang(message.from_user.id)
@@ -398,10 +398,6 @@ async def ask_question(
     )
 
 
-_MAIN_BUTTONS = {
-    kb.BTN_KNOWLEDGE, kb.BTN_SEND_DATA, kb.BTN_AGREEMENTS, kb.BTN_BLACKBOX, kb.BTN_MGMT,
-    kb.BTN_BROADCAST, kb.BTN_REFRESH, kb.BTN_BALANCE, kb.BTN_HELP, kb.BTN_LANG, kb.BTN_CANCEL,
-}
 
 
 def _tools(pd, plans: dict, hiring: dict, today) -> dict:

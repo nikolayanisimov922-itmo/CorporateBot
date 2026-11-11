@@ -1,6 +1,7 @@
 """Этап 4: ответы Claude строго по найденным кускам базы знаний."""
 from __future__ import annotations
 
+import datetime as dt
 import html
 import json
 import re
@@ -370,6 +371,49 @@ class ClaudeAnswerer:
                     })
             messages.append({"role": "user", "content": results})
         return ""
+
+    async def parse_absence(self, text: str, today: "dt.date") -> dict:
+        """«🏖 Отсутствие»: даты/время отсутствия из свободного текста → JSON.
+
+        Возвращает {"status": "ok", "start_date", "end_date", "start_time",
+        "end_time", "part"} или {"status": "unclear", "question"}.
+        Проверку результата делает код (app/absence.py).
+        """
+        weekdays = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
+        week = [today + dt.timedelta(days=i - today.weekday()) for i in range(14)]
+        cal = ", ".join(f"{weekdays[d.weekday()][:2]} {d:%d.%m.%Y}" for d in week)
+        system = (
+            "Сотрудник сообщает, когда его не будет на работе. Определи период отсутствия.\n"
+            f"Сегодня {today:%d.%m.%Y}, {weekdays[today.weekday()]}. Календарь этой и "
+            f"следующей недели: {cal}.\n"
+            "Правила:\n"
+            "- День недели без уточнения («во вторник», «со вторника по четверг») — "
+            "ближайший такой день начиная с сегодня, то есть на этой неделе; если период "
+            "на этой неделе уже целиком прошёл — на следующей.\n"
+            "- «Завтра», «послезавтра», «на следующей неделе» — от сегодняшней даты.\n"
+            "- Время — в 24-часовом формате ЧЧ:ММ («с 10 до 13» → 10:00 и 13:00, «до обеда» "
+            "→ part first_half, «после обеда» → part second_half). Время и половина дня — "
+            "только если отсутствие в пределах одного дня.\n"
+            "- Один день целиком — start_date = end_date, без времени.\n"
+            "- Если по тексту нельзя однозначно понять даты (например, «на пару дней» без "
+            "даты или «в следующий раз») — status unclear и короткий уточняющий вопрос "
+            "на языке сотрудника. Не выдумывай даты.\n"
+            "Верни ТОЛЬКО JSON без пояснений, одной из форм:\n"
+            '{"status": "ok", "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD", '
+            '"start_time": "HH:MM или null", "end_time": "HH:MM или null", '
+            '"part": "first_half | second_half | null"}\n'
+            '{"status": "unclear", "question": "..."}'
+        )
+        resp = await self._create(
+            max_tokens=500,
+            system=system,
+            messages=[{"role": "user", "content": f"Сообщение сотрудника:\n\n{text}"}],
+        )
+        raw = "".join(b.text for b in resp.content if b.type == "text")
+        start, end = raw.find("{"), raw.rfind("}")
+        if start < 0 or end <= start:
+            raise ValueError(f"Claude вернул не JSON: {raw[:200]}")
+        return json.loads(raw[start : end + 1])
 
     async def translate(self, text: str, target: str = "English") -> str:
         """Переводит текст (для двуязычных рассылок). Возвращает только перевод."""

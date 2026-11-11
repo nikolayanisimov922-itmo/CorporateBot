@@ -42,6 +42,7 @@ async def on_help(message: Message, config: Config, users: UserRegistry) -> None
         t("help_kb", lang),
         t("help_submit", lang),
         t("help_blackbox", lang),
+        t("help_absence", lang),
     ]
     if config.is_mgmt(message.from_user.id):
         lines.append(t("help_mgmt", lang))

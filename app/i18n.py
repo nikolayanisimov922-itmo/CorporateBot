@@ -41,6 +41,10 @@ TEXTS: dict[str, dict[str, str]] = {
         "ru": "⬛ <b>Черный ящик</b> — сразу зафиксировать проблему или сложный кейс.",
         "en": "⬛ <b>Black box</b> — record a problem or a difficult case right away.",
     },
+    "help_absence": {
+        "ru": "🏖 <b>Отсутствие</b> — сообщить, когда вас не будет (отпуск, отгул, пара часов); команда получит уведомление.",
+        "en": "🏖 <b>Time off</b> — tell the team when you'll be away (vacation, day off, a few hours).",
+    },
     "help_lang": {
         "ru": "🌐 <b>English / Русский</b> — переключить язык бота.",
         "en": "🌐 <b>English / Русский</b> — switch the bot language.",

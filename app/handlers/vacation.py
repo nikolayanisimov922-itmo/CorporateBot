@@ -31,7 +31,7 @@ from config import Config
 router = Router()
 
 CACHE_KEY = "vacation"
-HR_CONTACT = "@miamishel"
+HR_CONTACT = "@AnastaciaTen"
 NOTICE_DAYS = 60  # заявку подавать минимум за 60 календарных дней (регламент)
 
 # Подписи разбивки с листа «Totals» → по-русски. Holiday не повторяем (это «использовано»).

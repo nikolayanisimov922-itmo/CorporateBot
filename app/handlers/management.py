@@ -576,6 +576,7 @@ async def sheets_check(message: Message, config: Config, sheets: SheetsClient | 
         ("📈 Мастер-таблица проектов", config.mgmt_projects_sheet_id, False),
         ("📈 План-факт", config.mgmt_plan_sheet_id, False),
         ("📈 Найм", config.mgmt_hiring_sheet_id, False),
+        ("🌴 Отпуска", config.vacation_sheet_id, False),
     ]
     await message.answer("🔎 Проверяю доступ бота к таблицам…")
     lines = ["🔎 <b>Доступ бота к таблицам</b>", ""]

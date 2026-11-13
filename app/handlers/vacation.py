@@ -228,3 +228,25 @@ async def vac_list(
     if vd.issues:
         lines += ["", "Замечания по таблице:"] + [f"• {e(i)}" for i in vd.issues[:15]]
     await message.answer("\n".join(lines))
+
+
+@router.message(Command("users"))
+async def list_users(message: Message, config: Config, users: UserRegistry) -> None:
+    """Админ: все, кто пользовался ботом, — Telegram ID, ник, имя (для колонки «Telegram ID»)."""
+    if not config.is_admin(message.from_user.id):
+        return
+    rows = sorted(users.entries(), key=lambda x: (x[1] or "").casefold())
+    lines = [f"👥 <b>Пользователи бота: {len(rows)}</b>", "<i>ID · ник · имя в Telegram</i>", ""]
+    lines += [
+        f"<code>{uid}</code> · {'@' + e(un) if un else '—'} · {e(name or '—')}"
+        for uid, name, un in rows
+    ]
+    lines += ["", "Кого нет в списке — пусть нажмёт /start в боте."]
+    chunk = ""
+    for line in lines:
+        if len(chunk) + len(line) + 1 > 4000:
+            await message.answer(chunk)
+            chunk = ""
+        chunk += line + "\n"
+    if chunk.strip():
+        await message.answer(chunk)

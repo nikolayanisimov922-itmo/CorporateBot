@@ -71,6 +71,15 @@ def _name_key(name: str) -> str:
     return " ".join(sorted(norm(name).replace("ё", "е").split()))
 
 
+def _tg(v) -> str:
+    """Ячейка «Telegram ID»: 123456789 / 123456789.0 / «@ник» → «123456789» / «ник»."""
+    if v is None:
+        return ""
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))
+    return str(v).strip().lstrip("@").removesuffix(".0")
+
+
 def parse_totals(rows: list[list], issues: list[str]) -> dict[str, Employee]:
     h = None
     for i, row in enumerate(rows[:10]):
@@ -114,7 +123,7 @@ def parse_totals(rows: list[list], issues: list[str]) -> dict[str, Employee]:
             total=to_num(cell(row, c_total)),
             used=to_num(cell(row, c_used)),
             remaining=to_num(cell(row, c_rem)),
-            telegram=str(cell(row, c_tg) or "").strip().lstrip("@") if c_tg is not None else "",
+            telegram=_tg(cell(row, c_tg)) if c_tg is not None else "",
         )
         for j, label in breakdown_cols.items():
             v = to_num(cell(row, j))

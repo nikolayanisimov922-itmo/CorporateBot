@@ -15,7 +15,11 @@ BTN_KNOWLEDGE = "📚 База знаний / Knowledge base"
 BTN_SEND_DATA = "📤 Передать данные / Submit data"
 BTN_AGREEMENTS = "🤝 Договорённости / Client notes"
 BTN_BLACKBOX = "⬛ Черный ящик / Black box"
-BTN_ABSENCE = "🏖 Отсутствие / Time off"
+BTN_ABSENCE = "🏖 Отсутствие / Отпуск · Time off"
+BTN_ABSENCE_OLD = "🏖 Отсутствие / Time off"  # старая подпись — у кого клавиатура не обновилась
+BTN_ABS_REPORT = "📣 Сообщить об отсутствии / Report absence"
+BTN_ABS_VACATION = "🌴 Мой отпуск / My vacation"
+BTN_MENU = "⬅️ Главное меню / Main menu"
 BTN_BROADCAST = "📢 Рассылка / Broadcast"
 BTN_REFRESH = "🔄 Обновить базу / Refresh"
 BTN_BALANCE = "💰 Баланс / Balance"
@@ -27,7 +31,8 @@ BTN_CANCEL = "❌ Отмена / Cancel"
 
 # Все кнопки главного меню — чтобы разделы с вводом текста их не «съедали».
 MAIN_BUTTONS = {
-    BTN_KNOWLEDGE, BTN_SEND_DATA, BTN_AGREEMENTS, BTN_BLACKBOX, BTN_ABSENCE, BTN_BROADCAST,
+    BTN_KNOWLEDGE, BTN_SEND_DATA, BTN_AGREEMENTS, BTN_BLACKBOX, BTN_ABSENCE, BTN_ABSENCE_OLD,
+    BTN_ABS_REPORT, BTN_ABS_VACATION, BTN_MENU, BTN_BROADCAST,
     BTN_REFRESH, BTN_BALANCE, BTN_MGMT, BTN_HELP, BTN_LANG, BTN_CANCEL,
 }
 
@@ -152,4 +157,17 @@ def severity_menu() -> ReplyKeyboardMarkup:
         keyboard=rows,
         resize_keyboard=True,
         input_field_placeholder="Насколько серьёзно?",
+    )
+
+
+def absence_menu() -> ReplyKeyboardMarkup:
+    """Подменю «🏖 Отсутствие / Отпуск»."""
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=BTN_ABS_REPORT)],
+            [KeyboardButton(text=BTN_ABS_VACATION)],
+            [KeyboardButton(text=BTN_MENU)],
+        ],
+        resize_keyboard=True,
+        input_field_placeholder="Выберите действие…",
     )

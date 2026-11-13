@@ -65,6 +65,10 @@ class UserRegistry:
                 return int(key)
         return None
 
+    def entries(self) -> list[tuple[int, str, str]]:
+        """[(ID, имя, ник)] всех, кто писал боту."""
+        return [(int(k), v.get("name", ""), v.get("username", "")) for k, v in self._users.items()]
+
     def all_ids(self) -> list[int]:
         return [int(k) for k in self._users]
 

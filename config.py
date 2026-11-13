@@ -83,6 +83,8 @@ class Config:
     mgmt_projects_sheet_id: str = ""
     mgmt_plan_sheet_id: str = ""
     mgmt_hiring_sheet_id: str = ""
+    # Таблица отпусков (HR) — для «🌴 Мой отпуск». Боту — доступ «Читатель».
+    vacation_sheet_id: str = ""
     # Модель для «💬 Спросить»; пусто — та же, что у всего бота.
     mgmt_model: str = ""
 
@@ -170,6 +172,7 @@ def load_config() -> Config:
         mgmt_plan_sheet_id=_get("MGMT_PLAN_SHEET_ID"),
         mgmt_hiring_sheet_id=_get("MGMT_HIRING_SHEET_ID"),
         mgmt_model=_get("MGMT_MODEL"),
+        vacation_sheet_id=_get("VACATION_SHEET_ID"),
         claude_low_balance_usd=_float(_get("CLAUDE_LOW_BALANCE_USD", "2"), 2.0),
         # 1–28, чтобы день существовал в любом месяце; 0 — выключено.
         hosting_reminder_day=max(0, min(28, _int(_get("HOSTING_REMINDER_DAY", "1"), 1))),

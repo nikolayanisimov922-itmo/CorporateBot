@@ -11,6 +11,7 @@ from app.handlers import (
     knowledge,
     management,
     menu,
+    vacation,
 )
 
 
@@ -25,6 +26,7 @@ def setup_routers() -> Router:
     router.include_router(agreements.router)
     router.include_router(blackbox.router)
     router.include_router(absence.router)
+    router.include_router(vacation.router)
     router.include_router(billing.router)
     router.include_router(menu.router)
     return router

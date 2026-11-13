@@ -40,6 +40,18 @@ CB_EDIT = "abs_edit"
 MAX_ROUNDS = 3  # сколько раз переспрашиваем, прежде чем попросить точные даты
 
 TXT = {
+    "menu": {
+        "ru": (
+            "🏖 <b>Отсутствие / Отпуск</b>\n\n"
+            "📣 <b>Сообщить об отсутствии</b> — команда получит уведомление, когда вас не будет.\n"
+            "🌴 <b>Мой отпуск</b> — сколько дней осталось, что запланировано и как взять отпуск."
+        ),
+        "en": (
+            "🏖 <b>Time off</b>\n\n"
+            "📣 <b>Report absence</b> — the team gets notified when you'll be away.\n"
+            "🌴 <b>My vacation</b> — days left, what's booked and how to take leave."
+        ),
+    },
     "ask": {
         "ru": (
             "🏖 <b>Отсутствие</b>\n\n"
@@ -132,9 +144,25 @@ async def _start(message: Message, state: FSMContext, lang: str, test: bool) -> 
     await message.answer(text, reply_markup=kb.cancel_menu("с 16 по 20 ноября / Tue–Thu"))
 
 
-@router.message(F.text == kb.BTN_ABSENCE)
+@router.message(F.text.in_({kb.BTN_ABSENCE, kb.BTN_ABSENCE_OLD}))
 async def enter(message: Message, state: FSMContext, users: UserRegistry) -> None:
+    """Подменю: сообщить об отсутствии / узнать про свой отпуск."""
+    await state.clear()
+    await message.answer(_tx("menu", users.get_lang(message.from_user.id)), reply_markup=kb.absence_menu())
+
+
+@router.message(F.text == kb.BTN_ABS_REPORT)
+async def report(message: Message, state: FSMContext, users: UserRegistry) -> None:
     await _start(message, state, users.get_lang(message.from_user.id), test=False)
+
+
+@router.message(F.text == kb.BTN_MENU)
+async def back_to_menu(message: Message, state: FSMContext, config: Config, users: UserRegistry) -> None:
+    await state.clear()
+    await message.answer(
+        t("fallback", users.get_lang(message.from_user.id)),
+        reply_markup=kb.main_menu(config.is_admin(message.from_user.id)),
+    )
 
 
 @router.message(Command("absence_test"))

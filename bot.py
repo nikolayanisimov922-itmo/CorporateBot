@@ -21,6 +21,7 @@ from app.expenses import ExpenseStore
 from app.handlers import setup_routers
 from app.management_data import SheetCache
 from app.handlers.expenses import reminders_loop
+from app.handlers.reimburse import reminders_loop as reimburse_loop
 from app.knowledge_service import KnowledgeService
 from app.middlewares import RegisterUserMiddleware
 from app.rag import Embedder, SearchIndex
@@ -174,6 +175,8 @@ async def main() -> None:
 
     # План/факт расходов: напоминания комплектаторам и ПМ по расписанию.
     asyncio.create_task(reminders_loop(bot, config, users, expense_store, sheets))
+    # Компенсация расходов: напоминания 15 числа и в последний день месяца.
+    asyncio.create_task(reimburse_loop(bot, config, users))
 
     me = await bot.get_me()
     logging.info("Бот запущен: @%s. Напишите ему /start в Telegram.", me.username)

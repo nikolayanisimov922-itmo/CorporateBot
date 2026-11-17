@@ -20,22 +20,22 @@ from dataclasses import dataclass
 
 from app.expenses import MONTHS_EN, now_dubai
 
-# Кому напоминать. username — ник в Telegram без @ (None — ник пока неизвестен:
-# такого человека админ привязывает командой /reimb_link).
+# Кому напоминать. username — ник в Telegram без @, id — Telegram ID (если известен;
+# надёжнее ника). Без того и другого — привязка админом через /reimb_link.
 # aliases — как имя может быть написано в Telegram (для подсказок админу).
 PEOPLE: list[dict] = [
     {"name": "Полина", "username": "oohgirllookathim", "aliases": ["polina", "poly", "полина"]},
     {"name": "Илья", "username": "dizworldwide", "aliases": ["ilya", "ilia", "илья"]},
     {"name": "Владимир", "username": "Vladimir_Belkanov", "aliases": ["vladimir", "владимир"]},
     {"name": "Татьяна", "username": "tetiana_bachynska", "aliases": ["tetiana", "tatiana", "татьяна"]},
-    {"name": "Файза", "username": None, "aliases": ["faiza", "fayza", "faizah", "файза"]},
+    {"name": "Файза", "username": "Faiza_1999", "id": 5433631411, "aliases": ["faiza", "fayza", "faizah", "файза"]},
     {"name": "Алена", "username": "alenka_lykova", "aliases": ["alena", "алена", "алёна"]},
     {"name": "Мэй", "username": "May_Magdy", "aliases": ["may", "мэй"]},
-    {"name": "Омар", "username": None, "aliases": ["omar", "омар"]},
-    {"name": "Мохаммед", "username": None, "aliases": ["moham", "muham", "mohd", "мохам", "мухам", "мохаммед"]},
+    {"name": "Омар", "username": "Oalrawii", "id": 7744946171, "aliases": ["omar", "омар"]},
+    {"name": "Мохаммед", "username": "mhmd_baroudi", "id": 6370846393, "aliases": ["moham", "muham", "mohd", "мохам", "мухам", "мохаммед"]},
     {"name": "Ансия", "username": "amiii1234", "aliases": ["ansiya", "ansia", "ансия"]},
     {"name": "Алина", "username": "sova_designed", "aliases": ["alina", "алина"]},
-    {"name": "Сана", "username": None, "aliases": ["sana", "сана"]},
+    {"name": "Сана", "username": "Sanii_999", "id": 6274397777, "aliases": ["sana", "сана"]},
     {"name": "Мерим", "username": "merimka9303", "aliases": ["meerim", "merim", "мерим", "меерим"]},
 ]
 

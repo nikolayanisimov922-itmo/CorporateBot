@@ -68,7 +68,7 @@ def _buttons(period_key: str) -> InlineKeyboardMarkup:
 
 def resolve(p: dict, users: UserRegistry, st: ReimburseStore) -> int | None:
     """Telegram ID человека из списка: привязка админа, иначе по нику."""
-    uid = st.linked_id(p["name"])
+    uid = st.linked_id(p["name"]) or p.get("id")
     if uid is None and p.get("username"):
         uid = users.find_by_username(p["username"])
     return uid

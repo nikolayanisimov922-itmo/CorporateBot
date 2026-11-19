@@ -7,12 +7,12 @@
 Корпоративный Telegram-бот **@IODesignbot** компании **IO Design / Ivan Ogienko Company**
 (дизайн интерьеров, ремонт, комплектация мебелью; Дубай + США). Работает 24/7.
 
-**Владелец/админ — Николай** (Telegram `@Nikolay_ioio`, ADMIN_ID `8894384215`).
+**Владелец/админ — Николай** (Telegram `@Nikolay_ioio`, ADMIN_ID `6661556626`; `8894384215` — ID самого бота, не путать).
 Нетехнический пользователь: всё объяснять просто, команды для терминала — **по одной**,
 без жаргона. Он сам вставляет ключи/ID в `.env` на сервере.
 
-Процесс: код пишется в чате → коммит/пуш в GitHub → Николай на сервере делает
-`git pull` + перезапуск службы. Приложение локально на Mac НЕ запускаем.
+Процесс: код пишется в чате → коммит/пуш в GitHub → Николай на сервере (Mac mini) делает
+`git pull` + `pm2 restart corporatebot`. Приложение локально на Mac НЕ запускаем.
 
 ## 2. Репозиторий и ветка
 - GitHub: `nikolayanisimov922-itmo/CorporateBot`
@@ -24,24 +24,42 @@
 - Коммиты — с подписью Co-Authored-By, как в истории. Перед пушем — проверка сборки
   (`python3 -m compileall -q app bot.py config.py`) и тесты сценариев (см. §11).
 
-## 3. Сервер (прод)
-- Hetzner CX23 (4 ГБ RAM), Ubuntu 24.04, IP `2.28.106.77`, пользователь `root`.
-- Папка `/root/CorporateBot`, venv `.venv`, Python 3.12. Служба systemd `corporatebot`
-  (автозапуск, авто-рестарт; файл `deploy/corporatebot.service`).
+## 3. Сервер (прод) — Mac mini (с 19.11.2026)
+- **Mac mini M4 Pro, 32 ГБ, macOS 27**, стоит у руководителя в США, без монитора.
+  Доступ только через **Tailscale** (аккаунт anisimov.n@ivanogienko.work):
+  Mac mini `100.88.250.7`, MacBook Николая `100.111.162.125`.
+  Пользователь `ivan`. Терминал: `ssh ivan@100.88.250.7` (с MacBook); экран: Finder →
+  Cmd+K → `vnc://100.88.250.7`. Имя хоста после перезагрузки показывается как `Mac-2`
+  (macOS переименовала из `Macmini-Ivan`) — не мешает.
+- Папка `~/CorporateBot` (`/Users/ivan/CorporateBot`), venv `.venv` на **Python 3.12**
+  (`/opt/homebrew/bin/python3.12`; системный 3.9 и brew-шный 3.15 НЕ использовать —
+  не все зависимости под них есть). ffmpeg из Homebrew. Доступ к GitHub — `gh auth login`
+  (аккаунт nikolayanisimov922-itmo).
+- Запуск — **pm2** (процесс `corporatebot`, `pm2 save` сделан; pm2 стартует через
+  launchd при автовходе ivan). Сон выключен, автозапуск после отключения света.
+  Перезагрузку проверили — бот поднимается сам.
 - **Обновить бота (по одной команде):**
-  1. `ssh root@2.28.106.77`
-  2. `cd /root/CorporateBot && git pull`
-  3. (если менялись зависимости) `source .venv/bin/activate && pip install -r requirements.txt`
-  4. `systemctl restart corporatebot` — **ждать** строку `root@corporatebot:~/CorporateBot#`,
-     НЕ жать Ctrl+C (рестарт может занять 1–2 мин).
-  5. Проверка: `systemctl status corporatebot` → зелёное `active (running)`, выход `q`.
-- Логи: `journalctl -u corporatebot -n 100` (или `-f`).
+  1. `ssh ivan@100.88.250.7`
+  2. `cd ~/CorporateBot && git pull`
+  3. (если менялись зависимости) `.venv/bin/pip install -r requirements.txt`
+  4. `pm2 restart corporatebot`
+  5. Проверка: `pm2 list` → `online`.
+- Логи: `pm2 logs corporatebot --lines 100 --nostream` (ошибки: добавить `--err`).
+- Часовой пояс сервера — США; бот везде считает время Дубая (`expenses.now_dubai`),
+  на часы сервера не полагаться.
+- **Старый сервер Hetzner** (`ssh root@2.28.106.77`, `/root/CorporateBot`, systemd
+  `corporatebot`) — бот там ОСТАНОВЛЕН и автозапуск выключен (`systemctl disable`).
+  Держим пару дней как запасной, потом отказаться. Ни в коем случае не запускать оба
+  сразу. Вернуться: на Mac mini `pm2 stop corporatebot`, на Hetzner
+  `systemctl enable --now corporatebot` (данные data/ на Hetzner — на 19.11).
+  После отказа от Hetzner — в .env `HOSTING_REMINDER_DAY=0` (напоминание об оплате).
 - После старта бот ~1–2 мин грузит модель поиска; сообщения в это время пропускаются
   (`drop_pending_updates`) — после рестарта подождать и нажать `/start` заново.
 - Бот — один экземпляр (long polling), дважды не запускать.
-- Грабля: у Николая на Mac есть **старый локальный `.env`** (только BOT_TOKEN). Если в
-  редакторе вверху «UW PICO» — это Mac, не сервер (на сервере «GNU nano»).
-- Состояние бота — `data/*.json` на сервере (в git не попадает): users, billing,
+- Грабля: у Николая на MacBook есть **старый локальный `.env`** (только BOT_TOKEN), а сервер
+  теперь тоже Mac. Перед правкой `.env` смотреть начало строки терминала: на сервере
+  `ivan@Mac-2` / `ivan@Macmini-Ivan`, на MacBook — `a1@MacBook-Air-1`.
+- Состояние бота — `data/*.json` на сервере, `~/CorporateBot/data` (в git не попадает; перенесены с Hetzner 19.11): users, billing,
   expenses, absences, vacation_links, reimburse, индекс базы знаний.
 
 ## 4. Технологии
@@ -86,9 +104,9 @@ app/handlers/: menu, knowledge, agreements, blackbox, absence, vacation, expense
                management, broadcast, billing, reimburse
 ```
 
-## 6. Настройки `.env` на сервере (в git нет; секреты не просить показывать)
+## 6. Настройки `.env` на сервере (Mac mini, `~/CorporateBot/.env`) (в git нет; секреты не просить показывать)
 ```
-BOT_TOKEN= ; ADMIN_ID=8894384215 ; SUPPORT_USERNAME=Nikolay_ioio
+BOT_TOKEN= ; ADMIN_ID=6661556626 ; SUPPORT_USERNAME=Nikolay_ioio
 ANTHROPIC_API_KEY= ; ANTHROPIC_MODEL=claude-haiku-5-5 ; MGMT_MODEL=claude-sonnet-5-5
 NOTION_TOKEN= ; NOTION_ROOT_PAGE= ; NOTION_PUBLIC_DOMAIN=mirror-psychology-ae8.notion.site
 REFRESH_INTERVAL_MIN=60
@@ -214,7 +232,8 @@ VACATION_SHEET_ID=1524Y5YhQJX7YZxnZY9bISVXGcxRqNO9KYnvHwBcHLSE        # ЗЕРК
   (Notion: my-integrations; бот: @BotFather → Revoke). Просить закрывать ключи на скриншотах.
 - Таблица план-факта: «% накоп.» по неделям может ломаться; доверяем итоговому % (W).
 - В таблице отпусков на Totals строка 27 без имени (должен быть Бильдешбаев Артур).
-- Время на сервере — UTC; везде, где важно, используем Дубай (UTC+4, `expenses.now_dubai`).
+- `av` закреплён `<19`: в av 19 убрали `metadata_errors`, faster-whisper падает на голосовых.
+- Время на сервере — не Дубай (был UTC, теперь США); везде, где важно, используем Дубай (UTC+4, `expenses.now_dubai`).
 
 ## 9. Открытые вопросы / возможные следующие задачи
 - Подключить таблицу найма (MGMT_HIRING_SHEET_ID) и сверить HR-парсер с живыми данными;
@@ -232,7 +251,8 @@ VACATION_SHEET_ID=1524Y5YhQJX7YZxnZY9bISVXGcxRqNO9KYnvHwBcHLSE        # ЗЕРК
   ошибки админу через `app/notify.py`, тексты RU/EN, доступ админа через `config.is_admin`.
 - Надёжность как везде: данные не теряются (при сбое — админу целиком), понятная причина.
 - Для функций с рассылкой — тестовый режим, где сообщение получает только админ.
-- После правок кода — напомнить: `git pull` + `systemctl restart corporatebot` (ждать, без Ctrl+C).
+- После правок кода — напомнить: `ssh ivan@100.88.250.7` → `cd ~/CorporateBot && git pull` →
+  `pm2 restart corporatebot` → `pm2 list`.
 - Сначала план/вопросы, если не хватает данных (структура таблиц, правила) — не выдумывать.
 - Отвечать кратко; перед пушем — компиляция и прогон сценариев.
 

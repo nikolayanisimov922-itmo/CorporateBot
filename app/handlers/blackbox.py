@@ -8,7 +8,6 @@ Whisper) → серьёзность (кнопками) → Claude аккурат
 from __future__ import annotations
 
 import asyncio
-import datetime as dt
 import html
 import logging
 
@@ -26,6 +25,7 @@ from app.blackbox import (
     SEVERITIES,
 )
 from app.claude_answer import describe_error
+from app.expenses import now_dubai
 from app.i18n import t
 from app.knowledge_service import KnowledgeService
 from app.notify import alert_admin
@@ -177,7 +177,7 @@ async def get_severity(
     user = message.from_user
     who = user.full_name + (f" (@{user.username})" if user.username else "")
     row = [
-        dt.datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
+        now_dubai().strftime("%d.%m.%Y %H:%M:%S"),
         who,
         department,
         severity,

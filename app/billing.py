@@ -204,7 +204,8 @@ class BillingMonitor:
         """Раз в месяц, в день hosting_day (с 10:00), напоминает про оплату Hetzner."""
         if not self.hosting_day:
             return
-        now = now or dt.datetime.now()
+        # Время Дубая (UTC+4) — не зависит от часового пояса сервера.
+        now = now or dt.datetime.now(dt.timezone(dt.timedelta(hours=4)))
         month = now.strftime("%Y-%m")
         if self._state.get("hosting_month") == month:
             return

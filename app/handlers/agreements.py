@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import datetime as dt
 import html
 import logging
 
@@ -18,6 +17,7 @@ from aiogram.types import Message
 
 from app import keyboards as kb
 from app.claude_answer import describe_error
+from app.expenses import now_dubai
 from app.i18n import t
 from app.knowledge_service import KnowledgeService
 from app.notify import alert_admin
@@ -142,7 +142,7 @@ async def get_voice(
         logging.exception("Договорённости: Claude не смог оформить текст")
         claude_problem = describe_error(err)
 
-    now = dt.datetime.now().strftime("%d.%m.%Y %H:%M")
+    now = now_dubai().strftime("%d.%m.%Y %H:%M")
     name = message.from_user.full_name
     header = ["Дата", "Сотрудник", "Проект", "Расшифровка"]
     row = [now, name, project, structured]

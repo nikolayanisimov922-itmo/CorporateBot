@@ -83,6 +83,8 @@ class Config:
     mgmt_projects_sheet_id: str = ""
     mgmt_plan_sheet_id: str = ""
     mgmt_hiring_sheet_id: str = ""
+    # Зеркало финансовой таблицы «ДДС ОАЭ 2026» (Apps Script deploy/sync_finance.gs).
+    mgmt_finance_sheet_id: str = ""
     # Таблица отпусков (HR) — для «🌴 Мой отпуск». Боту — доступ «Читатель».
     vacation_sheet_id: str = ""
     # Модель для «💬 Спросить»; пусто — та же, что у всего бота.
@@ -110,7 +112,12 @@ class Config:
             "projects": self.mgmt_projects_sheet_id,
             "plan": self.mgmt_plan_sheet_id,
             "hiring": self.mgmt_hiring_sheet_id,
+            "finance": self.mgmt_finance_sheet_id,
         }
+
+
+# «Финансы - для бота» (Мой диск Николая) — зеркало «ДДС ОАЭ 2026».
+FINANCE_DEFAULT_SHEET = "1DZgGpfD2fBMyS1xDvPv5pfkx4Wa6Fj1oYeK6iEj4djY"
 
 
 def load_config() -> Config:
@@ -171,6 +178,7 @@ def load_config() -> Config:
         mgmt_projects_sheet_id=_get("MGMT_PROJECTS_SHEET_ID"),
         mgmt_plan_sheet_id=_get("MGMT_PLAN_SHEET_ID"),
         mgmt_hiring_sheet_id=_get("MGMT_HIRING_SHEET_ID"),
+        mgmt_finance_sheet_id=_get("MGMT_FINANCE_SHEET_ID") or FINANCE_DEFAULT_SHEET,
         mgmt_model=_get("MGMT_MODEL"),
         vacation_sheet_id=_get("VACATION_SHEET_ID"),
         claude_low_balance_usd=_float(_get("CLAUDE_LOW_BALANCE_USD", "2"), 2.0),

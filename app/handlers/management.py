@@ -3,8 +3,10 @@
 Доступ — по Telegram ID (MGMT_IDS) + админ. Проверка в КАЖДОМ обработчике:
 кнопку в меню видят только руководители, но колбэк мог бы прислать кто угодно.
 
-Цифры по кнопкам считает код (app/mgmt_*.py) — точно и без токенов. ИИ — только
-в «💬 Спросить» (tool use: Claude вызывает функции, код возвращает готовые данные).
+Цифры по кнопкам считает код (app/mgmt_*.py) — точно и без токенов.
+«💵 Финансы» — зеркало «ДДС ОАЭ 2026» (app/mgmt_finance.py).
+Кнопка «💬 Спросить» убрана из меню по просьбе владельца (ноябрь 2026); код
+обработчика оставлен — вернуть кнопку можно одной строкой в _menu_kb().
 Навигация — inline-кнопки, одно сообщение редактируется (edit_text).
 """
 from __future__ import annotations
@@ -31,7 +33,9 @@ from app import management_format as fm
 from app.claude_answer import describe_error, render_markdown
 from app.expenses import now_dubai
 from app.knowledge_service import KnowledgeService
+from app import mgmt_finance as fin
 from app.management_data import (
+    FINANCE,
     HIRING,
     MONTHS_EN,
     PLAN,
@@ -109,7 +113,7 @@ def _menu_kb() -> InlineKeyboardMarkup:
         [_btn("📁 Проекты / Projects", f"{CB}:pr")],
         [_btn("📊 Планы / Plans", f"{CB}:pl")],
         [_btn("👥 HR", f"{CB}:hr")],
-        [_btn("💬 Спросить / Ask", f"{CB}:ask")],
+        [_btn("💵 Финансы / Finance", f"{CB}:fin")],
         [_btn("🔄 Обновить данные / Refresh", f"{CB}:refresh")],
     ])
 
@@ -201,6 +205,10 @@ async def on_callback(
     if section == "ask":
         await state.set_state(AskState.waiting)
         await _show(callback, _tx("ask", lang), _kb([_back()]))
+        return
+
+    if section == "fin":
+        await _finance(callback, parts[1:], config, sheets, mgmt_cache, lang)
         return
 
     key = {"pr": PROJECTS, "pl": PLAN, "hr": HIRING}.get(section)
@@ -322,7 +330,105 @@ def _hr_view(hiring: dict, args: list[str], today, lang: str):
     return fm.hr_overview(blocks, m, lang), _kb(rows)
 
 
-# --- 💬 Спросить ----------------------------------------------------------------
+# --- 💵 Финансы ------------------------------------------------------------------
+
+FIN_SECTIONS = [
+    ("m", "💰 Деньги и счета"),
+    ("p", "📊 Прибыль по месяцам"),
+    ("c", "📅 Текущий месяц"),
+    ("d", "🧾 Долги"),
+    ("k", "🏦 Депозиты клиентов"),
+    ("f", "👥 ФОТ"),
+    ("n", "📈 Направления"),
+    ("a", "🔎 Аномалии расходов"),
+    ("t", "🏛 Налоги и вывод средств"),
+    ("w", "⚠️ Обратить внимание"),
+]
+_tz_cache: dict[str, str | None] = {}
+
+
+def _sheet_tz(sheets, sheet_id: str) -> str | None:
+    """Часовой пояс таблицы (для времени на листе «_обновлено»). Блокирующий."""
+    if sheet_id not in _tz_cache:
+        try:
+            _tz_cache[sheet_id] = sheets.spreadsheet(sheet_id).timezone
+        except Exception:  # noqa: BLE001
+            logging.exception("Финансы: не удалось узнать часовой пояс таблицы")
+            return None
+    return _tz_cache[sheet_id]
+
+
+async def _finance(callback: CallbackQuery, args: list[str], config: Config, sheets, cache, lang: str) -> None:
+    sub = args[0] if args else ""
+    if sub == "":
+        await _show(callback, "💵 <b>Финансы</b>\n\nПоказать актуальные ключевые показатели?", _kb([
+            [_btn("⚡ Да, кратко / Summary", f"{CB}:fin:s")],
+            [_btn("📋 Расширенная сводка / Detailed", f"{CB}:fin:x")],
+            _back(),
+        ]))
+        return
+    if sub == "x":
+        rows = [[_btn(t, f"{CB}:fin:{k}")] for k, t in FIN_SECTIONS]
+        await _show(callback, "📋 <b>Финансы — расширенная сводка</b>\n\nВыберите раздел:", _kb(rows + [_back("fin")]))
+        return
+    loaded, err = await _load(FINANCE, config, sheets, cache, callback.bot)
+    if loaded is None:
+        await _show(callback, _tx(err, lang, t=TABLE_TITLES[FINANCE]), _kb([_back("fin")]))
+        return
+    data, at, fresh = loaded
+    tz = await asyncio.to_thread(_sheet_tz, sheets, config.mgmt_finance_sheet_id)
+    now = now_dubai()
+    f = fin.parse_finance(data, now.date(), tz)
+    back = _back("fin:x")
+    if sub == "s":
+        text, markup = fin.summary_text(f, now), _kb([[_btn("📋 Расширенная сводка / Detailed", f"{CB}:fin:x")], _back("fin")])
+    elif sub == "m":
+        text, markup = fin.money_text(f), _kb([back])
+    elif sub == "p":
+        text, markup = fin.pl_text(f), _kb([back])
+    elif sub == "c":
+        text, markup = fin.month_text(f), _kb([back])
+    elif sub == "d":
+        text, markup = fin.debts_text(f), _kb([back])
+    elif sub == "k":
+        text, markup = fin.deposits_text(f), _kb([back])
+    elif sub in ("f", "fp"):
+        months = [m for m in f.payroll.months if f.payroll.total_zp.get(m)] or f.payroll.months
+        if not months:
+            await _show(callback, "👥 Лист «ФОТ_детально» пустой или не найден.", _kb([back]))
+            return
+        m = int(args[1]) if len(args) > 1 and args[1].isdigit() and int(args[1]) in months else (
+            f.cur if f.cur in months else months[-1]
+        )
+        if sub == "fp":
+            text, markup = fin.payroll_people_text(f, m), _kb([_back(f"fin:f:{m}")])
+        else:
+            i = months.index(m)
+            nav = []
+            if i > 0:
+                nav.append(_btn(f"◀ {fm.month_name(months[i - 1], lang)}", f"{CB}:fin:f:{months[i - 1]}"))
+            if i < len(months) - 1:
+                nav.append(_btn(f"{fm.month_name(months[i + 1], lang)} ▶", f"{CB}:fin:f:{months[i + 1]}"))
+            rows = [nav] if nav else []
+            rows += [[_btn("👤 По сотрудникам / By employee", f"{CB}:fin:fp:{m}")], back]
+            text, markup = fin.payroll_text(f, m), _kb(rows)
+    elif sub == "n":
+        text, markup = fin.directions_text(f), _kb([back])
+    elif sub == "a":
+        text, markup = fin.anomalies_text(f), _kb([back])
+    elif sub == "t":
+        text, markup = fin.taxes_text(f), _kb([back])
+    elif sub == "w":
+        text, markup = fin.warnings_text(f, now), _kb([back])
+    else:
+        return
+    foot = "\n\n" + fm.footer(at, fresh, lang)
+    if fin.footer(f):
+        foot += "\n" + fin.footer(f)
+    await _show(callback, _cut(text) + foot, markup)
+
+
+# --- 💬 Спросить (кнопка убрана из меню) -----------------------------------------
 
 @router.message(AskState.waiting, F.text | F.voice)
 async def ask_question(
@@ -576,6 +682,7 @@ async def sheets_check(message: Message, config: Config, sheets: SheetsClient | 
         ("📈 Мастер-таблица проектов", config.mgmt_projects_sheet_id, False),
         ("📈 План-факт", config.mgmt_plan_sheet_id, False),
         ("📈 Найм", config.mgmt_hiring_sheet_id, False),
+        ("💵 Финансы (зеркало ДДС)", config.mgmt_finance_sheet_id, False),
         ("🌴 Отпуска", config.vacation_sheet_id, False),
     ]
     await message.answer("🔎 Проверяю доступ бота к таблицам…")

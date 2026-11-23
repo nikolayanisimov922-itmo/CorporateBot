@@ -22,16 +22,19 @@ CACHE_TTL = 5 * 60
 PROJECTS = "projects"
 PLAN = "plan"
 HIRING = "hiring"
+FINANCE = "finance"
 
 TABLE_TITLES = {
     PROJECTS: "Мастер-таблица проектов",
     PLAN: "План-факт",
     HIRING: "Найм",
+    FINANCE: "Финансы",
 }
 TABLE_ENV = {
     PROJECTS: "MGMT_PROJECTS_SHEET_ID",
     PLAN: "MGMT_PLAN_SHEET_ID",
     HIRING: "MGMT_HIRING_SHEET_ID",
+    FINANCE: "MGMT_FINANCE_SHEET_ID",
 }
 
 # Листы мастер-таблицы, без которых раздел «Проекты» не посчитать.
